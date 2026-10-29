@@ -280,13 +280,37 @@ function renderConformitiesReport(items) {
   const root = document.getElementById('outConformities');
   if (!root) return;
   if (!conformities.length) {
-    root.innerHTML = '<div class="empty">Todavía no hay conformidades registradas.</div>';
+    root.innerHTML = '<div class="empty">Todavia no hay conformidades registradas.</div>';
     return;
   }
-  root.innerHTML = conformities.map(item => {
+  const approved = conformities.filter(item => item.status === 'Aprobada').length;
+  const observed = conformities.filter(item => item.status === 'Observada').length;
+  const pending = conformities.filter(item => item.status === 'Pendiente').length;
+  const reviewed = approved + observed;
+  const overdue = conformities.filter(item => item.status === 'Pendiente' && item.conformityDue && item.conformityDue < today()).length;
+  const progress = Math.round(reviewed / conformities.length * 100);
+  const categories = ['Equipos', 'Bienes', 'Servicios'].map(category => category + ': ' + conformities.filter(item => item.conformityCategory === category).length);
+  root.innerHTML = '<div class="grid">' +
+    [['Conformidades', conformities.length], ['Aprobadas', approved], ['Observadas', observed], ['Pendientes', pending], ['Fuera de plazo', overdue], ['Revisadas', progress + '%']]
+      .map(([label, value]) => '<div><div class="label">' + label + '</div><div class="metric">' + value + '</div></div>').join('') +
+    '</div><div class="item"><b>Por tipo:</b> ' + categories.join(' · ') +
+    '<div class="mini">Avance de revision: ' + reviewed + ' de ' + conformities.length + ' conformidad(es) revisadas (' + progress + '%).</div></div>' +
+    conformityCards(conformities);
+}
+
+function conformityCards(conformities) {
+  return conformities.map(item => {
     const overdue = item.status === 'Pendiente' && item.conformityDue && item.conformityDue < today();
-    return `<div class="item"><div class="itemtop"><div><h3>${shareEscape(item.conformityCategory)} · ${shareEscape(item.title)}</h3><div class="mini">Fecha: ${fmt(item.conformityDate)} · Plazo: ${fmt(item.conformityDue)}${overdue ? ' · PLAZO VENCIDO' : ''}</div><div class="mini">Enviada por: ${shareEscape(item.submitterName || item.email)} · ${shareEscape(item.email)} · Responsable: ${shareEscape(item.responsibleName || item.responsibleEmail || item.email)}</div></div><b>${shareEscape(item.status)}</b></div>${item.note ? `<p>${shareEscape(item.note)}</p>` : ''}${item.review ? `<p><b>Observaciones:</b> ${shareEscape(item.review)}</p>` : ''}<div class="actions">${item.files.map(file => `<button data-action="download" data-id="${shareEscape(file.id)}" data-name="${shareEscape(file.name)}">Descargar ${shareEscape(file.name)}</button>`).join('')}</div></div>`;
+    return '<div class="item"><div class="itemtop"><div><h3>' + shareEscape(item.conformityCategory) + ' · ' + shareEscape(item.title) + '</h3><div class="mini">Fecha: ' + fmt(item.conformityDate) + ' · Plazo: ' + fmt(item.conformityDue) + (overdue ? ' · PLAZO VENCIDO' : '') + '</div><div class="mini">Enviada por: ' + shareEscape(item.submitterName || item.email) + ' · ' + shareEscape(item.email) + ' · Responsable: ' + shareEscape(item.responsibleName || item.responsibleEmail || item.email) + '</div></div><b>' + shareEscape(item.status) + '</b></div>' + (item.note ? '<p>' + shareEscape(item.note) + '</p>' : '') + (item.review ? '<p><b>Observaciones:</b> ' + shareEscape(item.review) + '</p>' : '') + '<div class="actions">' + (item.files || []).map(file => '<button data-action="download" data-id="' + shareEscape(file.id) + '" data-name="' + shareEscape(file.name) + '">Descargar ' + shareEscape(file.name) + '</button>').join('') + '</div></div>';
   }).join('');
+}
+
+function renderControlConformities(items = sharedReportItems) {
+  const root = document.getElementById('controlConformities');
+  if (!root) return;
+  const conformities = items.filter(item => item.kind === 'conformity').sort((a, b) => String(b.created).localeCompare(String(a.created)));
+  root.innerHTML = '<h3 style="margin:16px 0 6px">Conformidades enviadas (' + conformities.length + ')</h3>' +
+    (conformities.length ? conformityCards(conformities) : '<div class="empty">Todavia no se han enviado conformidades.</div>');
 }
 
 function renderSharedReportSummary() {
@@ -309,9 +333,15 @@ function renderSharedReportSummary() {
   const overdueValuations = valuations.filter(item => item.status === 'Pendiente' && item.valuationDue && item.valuationDue < today()).length;
   const conformities = sharedReportItems.filter(item => item.kind === 'conformity');
   const overdueConformities = conformities.filter(item => item.status === 'Pendiente' && item.conformityDue && item.conformityDue < today()).length;
-  if (conclusion) conclusion.textContent = `En el período hay ${items.length} informe(s), ${valuations.length} valorización(es) y ${conformities.length} conformidad(es). Se registran ${overdueValuations} valorización(es) y ${overdueConformities} conformidad(es) con plazo vencido, además de ${openActivities} actividad(es) sin concluir.`;
+    const approvedConformities = conformities.filter(item => item.status === 'Aprobada').length;
+  const observedConformities = conformities.filter(item => item.status === 'Observada').length;
+  const pendingConformities = conformities.filter(item => item.status === 'Pendiente').length;
+  const reviewedConformities = approvedConformities + observedConformities;
+  const conformityProgress = conformities.length ? Math.round(reviewedConformities / conformities.length * 100) : 0;
+  if (conclusion) conclusion.textContent = 'En el periodo hay ' + items.length + ' informe(s), ' + valuations.length + ' valorizacion(es) y ' + conformities.length + ' conformidad(es): ' + approvedConformities + ' aprobada(s), ' + observedConformities + ' observada(s) y ' + pendingConformities + ' pendiente(s), con ' + conformityProgress + '% de avance de revision. Se registran ' + overdueValuations + ' valorizacion(es) y ' + overdueConformities + ' conformidad(es) con plazo vencido, ademas de ' + openActivities + ' actividad(es) sin concluir.';
   renderValuationsReport(sharedReportItems);
   renderConformitiesReport(sharedReportItems);
+  renderControlConformities(sharedReportItems);
 }
 
 async function refreshSharedReportView() {
@@ -401,6 +431,7 @@ async function renderControlInbox(me = null) {
   try {
     const items = await shareApi('/api/submissions');
     sharedReportItems = items;
+    renderControlConformities(items);
     if (me.role === 'admin') {
       inbox.innerHTML = adminSubmissionGroups(items);
       const privateList = document.getElementById('privateReviewList');
