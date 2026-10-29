@@ -1,6 +1,18 @@
 const SHARE_TOKEN = 'cc_share_token';
 const shareRoot = document.getElementById('shareRoot');
 let sharedReportItems = [];
+let liveAuditLog = [];
+let liveWorkspace = {};
+let liveRevision = -1;
+let liveSyncTimer = null;
+let liveSyncBusy = false;
+let currentUser = null;
+let sourceSaveTimer = null;
+let projectSaveTimer = null;
+let workerDraft = { report: {}, valuation: {}, conformity: {} };
+let workerDraftTimer = null;
+let workerDraftLoading = false;
+let workerDraftLoadedFor = '';
 
 function shareEscape(value) {
   return esc(String(value ?? ''));
@@ -54,6 +66,7 @@ function prepareProjectForm() {
   if (saveButton) saveButton.onclick = saveSharedProject;
   ubigeoReady = loadUbigeoCatalog();
   setProjectAccess(null);
+  bindAutosave();
 }
 
 async function loadUbigeoCatalog() {
@@ -115,6 +128,12 @@ async function loadSharedProject() {
   try {
     if (ubigeoReady) await ubigeoReady;
     const me = await shareApi('/api/me');
+    currentUser = me;
+    if (me.role === 'staff' && workerDraftLoadedFor !== me.email) {
+      const savedDraft = await shareApi('/api/draft');
+      workerDraft = savedDraft.draft || workerDraft;
+      workerDraftLoadedFor = me.email;
+    }
     const saved = await shareApi('/api/project');
     setProjectAccess(me);
     ['name', 'entity', 'code', 'cutoff', 'description'].forEach(key => {
@@ -129,6 +148,8 @@ async function loadSharedProject() {
     }
     project = { name: saved.name || '', entity: saved.entity || '', location: saved.location || '', code: saved.code || '', cutoff: saved.cutoff || today(), desc: saved.description || '' };
     renderReportDocument();
+    await refreshLiveState(true);
+    startLiveSync();
   } catch (error) {
     setProjectAccess(null);
     const message = document.getElementById('projectAccessMessage');
@@ -136,7 +157,7 @@ async function loadSharedProject() {
   }
 }
 
-async function saveSharedProject() {
+async function saveSharedProject(silent = false) {
   try {
     await shareApi('/api/project', { method: 'POST', body: JSON.stringify({
       name: document.getElementById('projectName').value,
@@ -149,9 +170,9 @@ async function saveSharedProject() {
       districtCode: document.getElementById('projectDistrict').value
     }) });
     await loadSharedProject();
-    alert('Información del proyecto guardada para todos.');
+    if (!silent) toast('Informacion del proyecto guardada para todos.');
   } catch (error) {
-    alert(error.message);
+    if (silent) shareMessage(error.message, true); else alert(error.message);
   }
 }
 
@@ -207,7 +228,7 @@ function prepareControlInbox() {
     select.after(hint);
   }
   const fileHelp = document.querySelector('#reportFile')?.parentElement.querySelector('.mini');
-  if (fileHelp) fileHelp.textContent = 'Inicia sesión en Entregas: el archivo quedará guardado para descargarlo desde las otras laptops.';
+  if (fileHelp) fileHelp.textContent = 'Puedes adjuntar hasta 20 archivos (15 MB cada uno, 100 MB en total). Se guardan para descargarlos desde otras laptops.';
   const legacyReview = document.getElementById('loginPanel')?.closest('.card');
   if (legacyReview) {
     legacyReview.id = 'privateReviewCard';
@@ -230,7 +251,7 @@ function sharedSubmissionCards(items, adminMode) {
 }
 
 function staffEditControls(item) {
-  if (item.editAuthorized) return `<div class="notice"><b>Corrección autorizada.</b><label>Asunto</label><input id="edit-title-${shareEscape(item.id)}" value="${shareEscape(item.title)}"><label>Comentario</label><textarea id="edit-note-${shareEscape(item.id)}">${shareEscape(item.note || '')}</textarea><label>Nuevo archivo (opcional, reemplaza el anterior)</label><input id="edit-file-${shareEscape(item.id)}" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.txt,.csv"><div class="actions"><button class="primary" data-action="save-edit" data-id="${shareEscape(item.id)}">Guardar corrección y reenviar</button></div></div>`;
+  if (item.editAuthorized) return `<div class="notice"><b>Corrección autorizada.</b><label>Asunto</label><input id="edit-title-${shareEscape(item.id)}" value="${shareEscape(item.title)}"><label>Comentario</label><textarea id="edit-note-${shareEscape(item.id)}">${shareEscape(item.note || '')}</textarea><label>Nuevo archivo (opcional, reemplaza el anterior)</label><input id="edit-file-${shareEscape(item.id)}" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.txt,.csv"><div class="mini">Hasta 20 archivos por envío, 15 MB cada uno y 100 MB en total.</div><div class="actions"><button class="primary" data-action="save-edit" data-id="${shareEscape(item.id)}">Guardar corrección y reenviar</button></div></div>`;
   if (item.editRequestStatus === 'pending') return '<p class="muted">Solicitud de corrección pendiente de autorización del administrador.</p>';
   return `${item.editRequestStatus === 'denied' ? '<p class="muted">La solicitud de corrección fue rechazada.</p>' : ''}<button data-action="request-edit" data-id="${shareEscape(item.id)}">Solicitar autorización para corregir</button>`;
 }
@@ -370,6 +391,157 @@ async function shareApi(path, options = {}) {
     : response.blob();
 }
 
+function toast(text) {
+  let box = document.getElementById('appToast');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'appToast';
+    box.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:1200;background:#12284b;color:#fff;padding:9px 14px;border-radius:7px;box-shadow:0 3px 14px #0003;max-width:90vw';
+    document.body.appendChild(box);
+  }
+  box.textContent = text;
+  box.hidden = false;
+  clearTimeout(box.hideTimer);
+  box.hideTimer = setTimeout(() => { box.hidden = true; }, 2600);
+}
+
+function renderAuditLog(entries) {
+  const root = document.getElementById('auditList');
+  if (!root) return;
+  root.innerHTML = entries?.length ? entries.slice(0, 100).map(entry => '<div class="statline"><span><b>' + shareEscape(entry.action) + '</b><br><span class="mini">' + shareEscape(entry.detail || '') + '</span></span><span style="text-align:right">' + shareEscape(entry.actor) + '<br><span class="mini">' + new Date(entry.at).toLocaleString('es-PE') + '</span></span></div>').join('') : '<div class="empty">Todavia no hay cambios registrados.</div>';
+}
+
+function renderLiveSnapshot(snapshot) {
+  const saved = snapshot.project || {};
+  project = { name: saved.name || '', entity: saved.entity || '', location: saved.location || '', code: saved.code || '', cutoff: saved.cutoff || today(), desc: saved.description || '' };
+  const projectFields = { projectName: project.name, entity: project.entity, projectCode: project.code, cutoff: project.cutoff, projectDesc: project.desc };
+  Object.entries(projectFields).forEach(([id, value]) => { const input = document.getElementById(id); if (input && document.activeElement !== input) input.value = value; });
+  if (ubigeoCatalog && saved.departmentCode) {
+    const department = document.getElementById('projectDepartment');
+    if (department && document.activeElement !== department) { department.value = saved.departmentCode; populateProjectProvinces(saved.provinceCode); populateProjectDistricts(saved.districtCode); }
+  }
+  const workspace = snapshot.workspace || {};
+  liveWorkspace = workspace;
+  workers = Array.isArray(workspace.workers) ? workspace.workers : [];
+  activities = Array.isArray(workspace.activities) ? workspace.activities : [];
+  comments = Array.isArray(workspace.comments) ? workspace.comments : [];
+  const sourceStore = workspace.sources || {};
+  sources = sourceStore.byWeek?.[weekKey(currentDate)] || sourceStore || { reports: '', activities: '', comments: '', other: '' };
+  const sourceFields = { srcReports: sources.reports, srcActivities: sources.activities, srcComments: sources.comments, srcOther: sources.other };
+  Object.entries(sourceFields).forEach(([id, value]) => { const input = document.getElementById(id); if (input && document.activeElement !== input) input.value = value || ''; });
+  sharedReportItems = snapshot.submissions || [];
+  liveAuditLog = snapshot.auditLog || [];
+  reports = sharedReportItems.filter(item => item.kind !== 'valuation' && item.kind !== 'conformity').map(item => ({ id: item.id, title: item.title, number: item.number, date: item.documentDate, responsible: item.responsibleName || item.responsibleEmail, file: (item.files || []).map(file => file.name).join(', '), note: item.note, status: item.status === 'Aprobada' ? 'Aprobado' : item.status === 'Observada' ? 'Con observaciones' : 'Pendiente de revision', reviewNote: item.review, reviewDate: item.reviewed }));
+  renderWorkers();
+  renderAll();
+  renderSharedReportSummary();
+  renderControlConformities(sharedReportItems);
+  renderAuditLog(liveAuditLog);
+  const status = document.getElementById('liveStatus');
+  if (status) status.textContent = 'Sincronizado | ' + new Date().toLocaleTimeString('es-PE');
+}
+
+async function refreshLiveState(force = false) {
+  if (liveSyncBusy || !sessionStorage.getItem(SHARE_TOKEN)) return;
+  liveSyncBusy = true;
+  try {
+    const snapshot = await shareApi('/api/live');
+    if (force || Number(snapshot.revision) !== liveRevision) {
+      liveRevision = Number(snapshot.revision) || 0;
+      renderLiveSnapshot(snapshot);
+      const control = document.getElementById('control');
+      const focusedInput = control?.contains(document.activeElement) && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
+      if (control && !control.classList.contains('hidden') && !focusedInput) await renderControlInbox(currentUser);
+    } else {
+      const status = document.getElementById('liveStatus');
+      if (status) status.textContent = 'Sincronizado | ' + new Date().toLocaleTimeString('es-PE');
+    }
+  } catch {
+    const status = document.getElementById('liveStatus');
+    if (status) status.textContent = 'Sin conexion · reintentando';
+  } finally { liveSyncBusy = false; }
+}
+
+function startLiveSync() {
+  if (!document.getElementById('liveStatus')) {
+    const status = document.createElement('small');
+    status.id = 'liveStatus';
+    status.className = 'tagline';
+    status.textContent = 'Sincronizando...';
+    document.querySelector('header')?.appendChild(status);
+  }
+  if (!liveSyncTimer) liveSyncTimer = setInterval(() => refreshLiveState(), 2000);
+}
+
+async function workspaceMutation(section, action, item = null, id = null, sourceWeek = '') {
+  const result = await shareApi('/api/workspace', { method: 'POST', body: JSON.stringify({ section, action, item, id, weekKey: sourceWeek }) });
+  liveRevision = Number(result.revision) - 1;
+  await refreshLiveState(true);
+  return result;
+}
+
+function bindAutosave() {
+  ['srcReports','srcActivities','srcComments','srcOther'].forEach(id => document.getElementById(id)?.addEventListener('input', () => {
+    clearTimeout(sourceSaveTimer);
+    const editingWeek = weekKey(currentDate);
+    const value = { reports: $('srcReports').value, activities: $('srcActivities').value, comments: $('srcComments').value, other: $('srcOther').value };
+    sourceSaveTimer = setTimeout(() => workspaceMutation('sources','set',value,null,editingWeek).catch(error => shareMessage(error.message, true)), 750);
+  }));
+  ['projectName','entity','projectCode','cutoff','projectDesc','projectDepartment','projectProvince','projectDistrict'].forEach(id => document.getElementById(id)?.addEventListener('change', () => {
+    clearTimeout(projectSaveTimer);
+    projectSaveTimer = setTimeout(() => saveSharedProject(true), 350);
+  }));
+  ['prevWeek','nextWeek'].forEach(id => document.getElementById(id)?.addEventListener('click', () => { setTimeout(() => refreshLiveState(true), 0); }));
+  document.getElementById('jumpDate')?.addEventListener('change', () => { setTimeout(() => refreshLiveState(true), 0); });
+  document.getElementById('resetDemo')?.remove();
+  bindWorkerDraftAutosave();
+}
+
+function collectWorkerDraft() {
+  const fields = {
+    report: ['reportTitle','reportNumber','reportDate','reportResponsible','reportNote'],
+    valuation: ['valuationNumber','valuationPeriod','valuationDue','valuationPlanned','valuationActual','valuationNote','reportResponsible'],
+    conformity: ['conformityCategory','conformityTitle','conformityDate','conformityDue','conformityNote','reportResponsible']
+  };
+  return Object.fromEntries(Object.entries(fields).map(([form, ids]) => [form, Object.fromEntries(ids.map(id => [id, document.getElementById(id)?.value || '']))]));
+}
+
+function applyWorkerDraft() {
+  if (!currentUser || currentUser.role !== 'staff' || !workerDraft) return;
+  workerDraftLoading = true;
+  for (const form of ['report','valuation','conformity']) {
+    for (const [id, value] of Object.entries(workerDraft[form] || {})) {
+      const field = document.getElementById(id);
+      if (field && field.type !== 'file') field.value = value ?? '';
+    }
+  }
+  workerDraftLoading = false;
+}
+
+function bindWorkerDraftAutosave() {
+  const ids = ['reportTitle','reportNumber','reportDate','reportResponsible','reportNote','valuationNumber','valuationPeriod','valuationDue','valuationPlanned','valuationActual','valuationNote','conformityCategory','conformityTitle','conformityDate','conformityDue','conformityNote'];
+  for (const id of ids) {
+    const field = document.getElementById(id);
+    if (!field || field.dataset.draftBound) continue;
+    field.dataset.draftBound = 'true';
+    for (const eventName of ['input','change']) field.addEventListener(eventName, () => {
+      if (workerDraftLoading || currentUser?.role !== 'staff') return;
+      clearTimeout(workerDraftTimer);
+      workerDraftTimer = setTimeout(saveWorkerDraft, 650);
+    });
+  }
+}
+
+async function saveWorkerDraft() {
+  if (currentUser?.role !== 'staff') return;
+  workerDraft = collectWorkerDraft();
+  try {
+    await shareApi('/api/draft', { method: 'POST', body: JSON.stringify({ draft: workerDraft }) });
+    const status = document.getElementById('liveStatus');
+    if (status) status.textContent = 'Borrador guardado · ' + new Date().toLocaleTimeString('es-PE');
+  } catch (error) { shareMessage(error.message, true); }
+}
+
 function renderAccess(setup) {
   if (setup) {
     shareRoot.innerHTML = `<div class="card"><h3>Preparar acceso de administración</h3><p class="mu">Crea tu contraseña de administración. Debe tener al menos 10 caracteres.</p><label>Correo administrador</label><input id="adminEmail" type="email" value="brandonlasteros31@gmail.com" readonly><label>Contraseña</label><input id="adminPassword" type="password" autocomplete="new-password"><label>Repite la contraseña</label><input id="adminConfirm" type="password" autocomplete="new-password"><div class="rw"><button class="pr" data-action="setup">Crear acceso de administración</button></div><p id="shareMessage"></p></div>`;
@@ -412,6 +584,7 @@ async function renderStaff(me) {
   const [items, people] = await Promise.all([shareApi('/api/submissions'), shareApi('/api/people')]);
     shareRoot.innerHTML = `<div class="card"><div class="rw"><div><h3>Cuenta del personal</h3><div class="mu">Correo: ${shareEscape(me.email)}</div></div><div class="sp"></div><button data-action="logout">Salir</button></div><label>Nombre completo</label><input id="profileName" value="${shareEscape(me.displayName || '')}" autocomplete="name"><div class="rw"><button data-action="save-name">Guardar mi nombre</button></div></div><div class="card"><p class="mu">Tus documentos se cargan desde Control. Si necesitas corregir una entrega, solicita autorización al administrador.</p><h3>Mis entregas</h3>${sharedSubmissionCards(items, false)}</div>`;
   populateResponsible(people, me.email);
+  applyWorkerDraft();
 }
 
 async function renderControlInbox(me = null) {
@@ -440,6 +613,7 @@ async function renderControlInbox(me = null) {
       inbox.innerHTML = `<div class="card"><h2>Mis informes enviados</h2>${sharedSubmissionCards(items, false)}</div>`;
       const people = await shareApi('/api/people');
       populateResponsible(people, me.email);
+      applyWorkerDraft();
     }
     if (me.role === 'admin') {
       $('mTotal').textContent = items.length;
@@ -461,6 +635,17 @@ async function fileBase64(file) {
   return btoa(binary);
 }
 
+async function filesPayload(input) {
+  const files = Array.from(input.files || []);
+  if (!files.length) throw new Error('Selecciona al menos un archivo para adjuntar.');
+  if (files.length > 20) throw new Error('Puedes adjuntar hasta 20 archivos por envío.');
+  if (files.some(file => file.size > 15000000)) throw new Error('Cada archivo debe pesar menos de 15 MB.');
+  if (files.reduce((sum, file) => sum + file.size, 0) > 100000000) throw new Error('El total de archivos no puede superar 100 MB por envío.');
+  const result = [];
+  for (const file of files) result.push({ name: file.name, data: await fileBase64(file) });
+  return result;
+}
+
 async function submitSharedReport(event) {
   event.preventDefault();
   try {
@@ -471,9 +656,7 @@ async function submitSharedReport(event) {
       document.querySelector('.tabs button[data-tab="entregas"], .tabs button[data-t="4"]')?.click();
       return;
     }
-    const file = document.getElementById('reportFile').files[0];
-    if (!file) throw new Error('Selecciona el documento que vas a enviar.');
-    if (file.size > 15000000) throw new Error('El archivo debe pesar menos de 15 MB.');
+    const files = await filesPayload(document.getElementById('reportFile'));
     const responsibleEmail = document.getElementById('reportResponsible').value;
     if (!responsibleEmail) throw new Error('Selecciona un responsable registrado.');
     await shareApi('/api/submissions', {
@@ -484,11 +667,10 @@ async function submitSharedReport(event) {
         documentDate: document.getElementById('reportDate').value,
         responsibleEmail,
         note: document.getElementById('reportNote').value,
-        files: [{ name: file.name, data: await fileBase64(file) }]
+        files
       })
     });
-    event.target.reset();
-    document.getElementById('reportDate').value = today();
+    document.getElementById('reportFile').value = '';
     const people = await shareApi('/api/people');
     populateResponsible(people, me.email);
     await renderControlInbox(me);
@@ -502,9 +684,7 @@ async function submitSharedValuation(event) {
   event.preventDefault();
   try {
     const me = await shareApi('/api/me');
-    const file = document.getElementById('valuationFile').files[0];
-    if (!file) throw new Error('Selecciona el archivo de la valorización.');
-    if (file.size > 15000000) throw new Error('El archivo debe pesar menos de 15 MB.');
+    const files = await filesPayload(document.getElementById('valuationFile'));
     const responsibleEmail = document.getElementById('reportResponsible').value || me.email;
     await shareApi('/api/submissions', { method: 'POST', body: JSON.stringify({
       kind: 'valuation',
@@ -517,9 +697,9 @@ async function submitSharedValuation(event) {
       documentDate: document.getElementById('valuationPeriod').value,
       responsibleEmail,
       note: document.getElementById('valuationNote').value,
-      files: [{ name: file.name, data: await fileBase64(file) }]
+      files
     }) });
-    event.target.reset();
+    document.getElementById('valuationFile').value = '';
     await renderControlInbox();
     await refreshSharedReportView();
     toast('Valorización enviada para revisión.');
@@ -532,9 +712,7 @@ async function submitSharedConformity(event) {
   event.preventDefault();
   try {
     const me = await shareApi('/api/me');
-    const file = document.getElementById('conformityFile').files[0];
-    if (!file) throw new Error('Selecciona el archivo de la conformidad.');
-    if (file.size > 15000000) throw new Error('El archivo debe pesar menos de 15 MB.');
+    const files = await filesPayload(document.getElementById('conformityFile'));
     const category = document.getElementById('conformityCategory').value;
     const description = document.getElementById('conformityTitle').value.trim();
     await shareApi('/api/submissions', { method: 'POST', body: JSON.stringify({
@@ -545,9 +723,9 @@ async function submitSharedConformity(event) {
       conformityDue: document.getElementById('conformityDue').value,
       responsibleEmail: document.getElementById('reportResponsible').value || me.email,
       note: document.getElementById('conformityNote').value,
-      files: [{ name: file.name, data: await fileBase64(file) }]
+      files
     }) });
-    event.target.reset();
+    document.getElementById('conformityFile').value = '';
     await renderControlInbox();
     await refreshSharedReportView();
     toast('Conformidad enviada para revisión.');
@@ -568,7 +746,7 @@ document.getElementById('refreshReport').onclick = refreshSharedReportView;
 document.getElementById('printReport').onclick = async () => { await refreshSharedReportView(); window.print(); };
 document.getElementById('copyReport').onclick = async () => {
   await refreshSharedReportView();
-  const text = `${$('reportProjectTitle').textContent}\n${$('reportMeta').textContent}\n\n1. INFORMACIÓN GENERAL\n${$('outProject').innerText}\n\n2. RESPONSABLES\n${$('outWorkers').innerText}\n\n3. INFORMES Y ESTADO\n${$('outReports').innerText}\n\n4. ACTIVIDADES\n${$('outActivities').innerText}\n\n5. FUENTES Y COMENTARIOS\n${$('outSources').innerText}\n\n6. CONCLUSIÓN\n${$('outConclusion').innerText}`;
+  const text = $('reportProjectTitle').textContent+'\n'+$('reportMeta').textContent+'\n\n1. INFORMACION GENERAL\n'+$('outProject').innerText+'\n\n2. RESPONSABLES\n'+$('outWorkers').innerText+'\n\n3. INFORMES Y ESTADO\n'+$('outReports').innerText+'\n\n4. VALORIZACIONES\n'+$('outValuations').innerText+'\n\n5. CONFORMIDADES\n'+$('outConformities').innerText+'\n\n6. ACTIVIDADES\n'+$('outActivities').innerText+'\n\n7. FUENTES Y COMENTARIOS\n'+$('outSources').innerText+'\n\n8. CONCLUSION\n'+$('outConclusion').innerText+'\n\n9. HISTORIAL DE CAMBIOS\n'+$('auditList').innerText;
   navigator.clipboard?.writeText(text).then(() => alert('Informe copiado.')).catch(() => alert(text));
 };
 
@@ -601,6 +779,10 @@ document.addEventListener('click', async event => {
     } else if (action === 'logout') {
       await shareApi('/api/logout', { method: 'POST' });
       sessionStorage.removeItem(SHARE_TOKEN);
+      if (liveSyncTimer) clearInterval(liveSyncTimer);
+      liveSyncTimer = null;
+      currentUser = null;
+      workerDraftLoadedFor = '';
       await renderEntryGate();
     } else if (action === 'invite' || action === 'invite-existing') {
       const email = action === 'invite' ? document.getElementById('newPersonEmail').value : button.dataset.email;
@@ -610,7 +792,8 @@ document.addEventListener('click', async event => {
     } else if (action === 'submit') {
       const files = [...document.getElementById('submissionFiles').files];
       if (!files.length) throw new Error('Selecciona al menos un archivo.');
-      if (files.length > 5) throw new Error('Puedes enviar hasta 5 archivos.');
+      if (files.length > 20) throw new Error('Puedes enviar hasta 20 archivos.');
+      if (files.reduce((sum, file) => sum + file.size, 0) > 100000000) throw new Error('El total de archivos no puede superar 100 MB por envío.');
       const payload = [];
       for (const file of files) {
         if (file.size > 15000000) throw new Error('Cada archivo debe pesar menos de 15 MB.');
@@ -638,9 +821,8 @@ document.addEventListener('click', async event => {
       await renderControlInbox();
       toast(button.dataset.status === 'authorized' ? 'Corrección autorizada.' : 'Solicitud rechazada.');
     } else if (action === 'save-edit') {
-      const file = document.getElementById(`edit-file-${button.dataset.id}`).files[0];
-      const files = file ? [{ name: file.name, data: await fileBase64(file) }] : [];
-      if (file && file.size > 15000000) throw new Error('El archivo debe pesar menos de 15 MB.');
+      const input = document.getElementById(`edit-file-${button.dataset.id}`);
+      const files = input.files.length ? await filesPayload(input) : [];
       await shareApi(`/api/submissions/${button.dataset.id}/edit`, { method: 'POST', body: JSON.stringify({ title: document.getElementById(`edit-title-${button.dataset.id}`).value, note: document.getElementById(`edit-note-${button.dataset.id}`).value, files }) });
       await renderShare();
       await renderControlInbox();

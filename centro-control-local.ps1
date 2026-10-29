@@ -17,12 +17,28 @@ if (Test-Path $script:StatePath) {
     }
 }
 if (-not $script:State.PSObject.Properties['project']) { $script:State | Add-Member -NotePropertyName project -NotePropertyValue ([pscustomobject]@{}) }
+if (-not $script:State.PSObject.Properties['workspace']) { $script:State | Add-Member -NotePropertyName workspace -NotePropertyValue ([pscustomobject]@{ workers = @(); activities = @(); comments = @(); sources = [pscustomobject]@{ reports = ''; activities = ''; comments = ''; other = '' } }) }
+foreach ($section in @('workers','activities','comments')) { if (-not $script:State.workspace.PSObject.Properties[$section]) { $script:State.workspace | Add-Member -NotePropertyName $section -NotePropertyValue @() } }
+if (-not $script:State.workspace.PSObject.Properties['sources']) { $script:State.workspace | Add-Member -NotePropertyName sources -NotePropertyValue ([pscustomobject]@{ byWeek = @{} }) }
+if (-not $script:State.workspace.sources.PSObject.Properties['byWeek']) { $script:State.workspace.sources | Add-Member -NotePropertyName byWeek -NotePropertyValue @{} }
+if (-not $script:State.PSObject.Properties['revision']) { $script:State | Add-Member -NotePropertyName revision -NotePropertyValue 0 }
+if (-not $script:State.PSObject.Properties['auditLog']) { $script:State | Add-Member -NotePropertyName auditLog -NotePropertyValue @() }
+foreach ($account in @($script:State.users)) { if (-not $account.PSObject.Properties['draft']) { $account | Add-Member -NotePropertyName draft -NotePropertyValue ([pscustomobject]@{}) } }
+$script:CurrentActor = 'sistema'
 foreach ($submission in @($script:State.submissions)) {
     if (-not $submission.PSObject.Properties['editAuthorized']) { $submission | Add-Member -NotePropertyName editAuthorized -NotePropertyValue $false }
     if (-not $submission.PSObject.Properties['editRequestStatus']) { $submission | Add-Member -NotePropertyName editRequestStatus -NotePropertyValue 'none' }
     if (-not $submission.PSObject.Properties['editRequestNote']) { $submission | Add-Member -NotePropertyName editRequestNote -NotePropertyValue '' }
 }
-function Save-State {
+function Save-State([string]$Action = '', [string]$Detail = '') {
+    if ($Action) {
+        $script:State.revision = [int]$script:State.revision + 1
+        $detailText = ([string]$Detail).Trim()
+        if ($detailText.Length -gt 2000) { $detailText = $detailText.Substring(0, 1997) + '...' }
+        $entry = [pscustomobject]@{ id = [Guid]::NewGuid().ToString('N'); at = (Get-Date).ToString('o'); actor = $script:CurrentActor; action = $Action; detail = $detailText; revision = [int]$script:State.revision }
+        $script:State.auditLog = @($script:State.auditLog) + @($entry)
+        if (@($script:State.auditLog).Count -gt 1000) { $script:State.auditLog = @($script:State.auditLog | Select-Object -Last 1000) }
+    }
     $json = ConvertTo-Json -InputObject $script:State -Depth 30
     [System.IO.File]::WriteAllText($script:StatePath, $json, [System.Text.UTF8Encoding]::new($false))
 }
@@ -35,7 +51,7 @@ function Send-Json($Context, $Value, [int]$Status = 200) {
     $Context.Response.Close()
 }
 function Read-Body($Context) {
-    if ($Context.Request.ContentLength64 -gt 30000000) { throw 'El envío supera el máximo permitido.' }
+    if ($Context.Request.ContentLength64 -gt 150000000) { throw 'El envío supera el máximo de 150 MB.' }
     $reader = [System.IO.StreamReader]::new($Context.Request.InputStream, $Context.Request.ContentEncoding)
     try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
 }
@@ -78,6 +94,7 @@ function Find-Submission([string]$Id) {
     return @($script:State.submissions | Where-Object { $_.id -eq $Id } | Select-Object -First 1)[0]
 }
 function Handle-Request($Context) {
+    $script:CurrentActor = 'sistema'
     $path = $Context.Request.Url.AbsolutePath
     $method = $Context.Request.HttpMethod
     if ($method -eq 'GET' -and $path -in @('/', '/demo')) {
@@ -127,6 +144,7 @@ function Handle-Request($Context) {
     if ($method -eq 'POST' -and $path -eq '/api/project') {
         if (-not (Require-Admin $Context)) { return }
         $data = Read-Json $Context
+        $previousProject = $script:State.project
         $locationCodes = @([string]$data.departmentCode, [string]$data.provinceCode, [string]$data.districtCode)
         if (($locationCodes | Where-Object { $_ } | Measure-Object).Count -gt 0) {
             if ($locationCodes.Where({ -not $_ }).Count -gt 0) { Send-Json $Context @{ error = 'Selecciona departamento, provincia y distrito.' } 400; return }
@@ -152,7 +170,12 @@ function Handle-Request($Context) {
             district = if ($district) { [string]$district.name } else { '' }
             location = if ($district) { [string]$district.name + ', ' + [string]$province.name + ', ' + [string]$department.name } else { '' }
         }
-        Save-State
+        $projectChanges = @()
+        foreach ($field in @('name','entity','code','cutoff','description','location')) {
+            $before = [string]$previousProject.$field; $after = [string]$script:State.project.$field
+            if ($before -cne $after) { $projectChanges += $field + ': ' + $before + ' -> ' + $after }
+        }
+        Save-State 'Proyecto actualizado' ($projectChanges -join '; ')
         Send-Json $Context @{ ok = $true; project = $script:State.project }
         return
     }
@@ -164,7 +187,8 @@ function Handle-Request($Context) {
         if ([string]$data.password -cne [string]$data.confirm -or ([string]$data.password).Length -lt 10) { Send-Json $Context @{ error = 'La contraseña debe tener al menos 10 caracteres y coincidir.' } 400; return }
         $record = New-PasswordRecord ([string]$data.password)
         $script:State.users = @($script:State.users) + @([pscustomobject]@{ email = $email; salt = $record.salt; hash = $record.hash; role = 'admin'; created = (Get-Date).ToString('o') })
-        Save-State
+        $script:CurrentActor = $email
+        Save-State 'Administrador creado' $email
         Send-Json $Context @{ ok = $true }
         return
     }
@@ -178,9 +202,10 @@ function Handle-Request($Context) {
         if ($displayName.Length -lt 2 -or $displayName.Length -gt 80) { Send-Json $Context @{ error = 'Escribe tu nombre completo.' } 400; return }
         if (([string]$data.password).Length -lt 10 -or [string]$data.password -cne [string]$data.confirm) { Send-Json $Context @{ error = 'La contraseña debe tener al menos 10 caracteres y coincidir.' } 400; return }
         $record = New-PasswordRecord ([string]$data.password)
-        $script:State.users = @($script:State.users) + @([pscustomobject]@{ email = $email; displayName = $displayName; salt = $record.salt; hash = $record.hash; role = 'staff'; created = (Get-Date).ToString('o') })
+        $script:State.users = @($script:State.users) + @([pscustomobject]@{ email = $email; displayName = $displayName; salt = $record.salt; hash = $record.hash; role = 'staff'; created = (Get-Date).ToString('o'); draft = [pscustomobject]@{} })
         $invite.used = $true
-        Save-State
+        $script:CurrentActor = $displayName + ' (' + $email + ')'
+        Save-State 'Cuenta activada' $email
         Send-Json $Context @{ ok = $true }
         return
     }
@@ -197,6 +222,121 @@ function Handle-Request($Context) {
         return
     }
     $user = Get-User $Context
+    if ($user) { $script:CurrentActor = if ($user.displayName) { [string]$user.displayName + ' (' + [string]$user.email + ')' } else { [string]$user.email } }
+    if ($method -eq 'GET' -and $path -eq '/api/live') {
+        if (-not $user) { Send-Json $Context @{ error = 'Inicia sesiÃ³n.' } 401; return }
+        $items = @($script:State.submissions | Where-Object { $user.role -eq 'admin' -or $_.email -eq $user.email } | Sort-Object created -Descending)
+        Send-Json $Context @{ revision = [int]$script:State.revision; project = $script:State.project; workspace = $script:State.workspace; submissions = $items; auditLog = @($script:State.auditLog | Select-Object -Last 100 | Sort-Object at -Descending) }
+        return
+    }
+    if ($method -eq 'GET' -and $path -eq '/api/draft') {
+        if (-not $user) { Send-Json $Context @{ error = 'Inicia sesión para recuperar tus datos.' } 401; return }
+        Send-Json $Context @{ draft = $user.draft }
+        return
+    }
+    if ($method -eq 'POST' -and $path -eq '/api/draft') {
+        if (-not $user -or $user.role -ne 'staff') { Send-Json $Context @{ error = 'Solo las cuentas de trabajador guardan borradores.' } 403; return }
+        $data = Read-Json $Context
+        $allowedFields = @{
+            report = @('reportTitle','reportNumber','reportDate','reportResponsible','reportNote')
+            valuation = @('valuationNumber','valuationPeriod','valuationDue','valuationPlanned','valuationActual','valuationNote','reportResponsible')
+            conformity = @('conformityCategory','conformityTitle','conformityDate','conformityDue','conformityNote','reportResponsible')
+        }
+        $savedDraft = [ordered]@{}
+        foreach ($formName in $allowedFields.Keys) {
+            $formDraft = [ordered]@{}
+            $incoming = $data.draft.$formName
+            foreach ($field in $allowedFields[$formName]) {
+                $property = if ($incoming) { $incoming.PSObject.Properties[$field] } else { $null }
+                if ($property) {
+                    $value = [string]$property.Value
+                    if ($value.Length -gt 2000) { $value = $value.Substring(0,2000) }
+                    $formDraft[$field] = $value
+                } elseif ($user.draft -and $user.draft.$formName -and $user.draft.$formName.PSObject.Properties[$field]) {
+                    $formDraft[$field] = [string]$user.draft.$formName.$field
+                }
+            }
+            $savedDraft[$formName] = [pscustomobject]$formDraft
+        }
+        $user.draft = [pscustomobject]$savedDraft
+        Save-State 'Borrador de trabajador actualizado' ($user.email + ' · datos de formularios')
+        Send-Json $Context @{ ok = $true; revision = [int]$script:State.revision }
+        return
+    }
+    if ($method -eq 'POST' -and $path -eq '/api/workspace') {
+        if (-not $user) { Send-Json $Context @{ error = 'Inicia sesiÃ³n para actualizar el espacio de trabajo.' } 401; return }
+        $data = Read-Json $Context
+        $section = [string]$data.section
+        $action = [string]$data.action
+        if ($section -notin @('workers','activities','comments','sources')) { Send-Json $Context @{ error = 'SecciÃ³n no vÃ¡lida.' } 400; return }
+        if ($section -eq 'sources') {
+            if ($action -ne 'set') { Send-Json $Context @{ error = 'AcciÃ³n no vÃ¡lida para las fuentes.' } 400; return }
+            $weekKey = [string]$data.weekKey
+            if ($weekKey -notmatch '^\d{4}-\d{2}-\d{2}$') { Send-Json $Context @{ error = 'La semana no es válida.' } 400; return }
+            $byWeek = @{}
+            $existingWeeks = $script:State.workspace.sources.byWeek
+            if ($existingWeeks -is [System.Collections.IDictionary]) { foreach ($key in $existingWeeks.Keys) { $byWeek[$key] = $existingWeeks[$key] } }
+            else { foreach ($property in $existingWeeks.PSObject.Properties) { $byWeek[$property.Name] = $property.Value } }
+            $value = $data.value
+            $currentSources = $byWeek[$weekKey]
+            $mergedSources = @{ reports = ''; activities = ''; comments = ''; other = '' }
+            if ($currentSources) { foreach ($field in @('reports','activities','comments','other')) { if ($currentSources.PSObject.Properties[$field]) { $mergedSources[$field] = [string]$currentSources.$field } } }
+            $sourceChanges = @()
+            foreach ($field in @('reports','activities','comments','other')) {
+                if ($value.PSObject.Properties[$field]) {
+                    $before = [string]$mergedSources[$field]; $after = [string]$value.$field
+                    if ($before -cne $after) {
+                        $beforeShort = if ($before.Length -gt 180) { $before.Substring(0,180) + '...' } else { $before }
+                        $afterShort = if ($after.Length -gt 180) { $after.Substring(0,180) + '...' } else { $after }
+                        $sourceChanges += $field + ': ' + $beforeShort + ' -> ' + $afterShort
+                    }
+                    $mergedSources[$field] = $after
+                }
+            }
+            $byWeek[$weekKey] = [pscustomobject]$mergedSources
+            $script:State.workspace.sources = [pscustomobject]@{ byWeek = $byWeek }
+            Save-State 'Fuentes actualizadas' ('Semana ' + $weekKey + '. ' + ($sourceChanges -join '; '))
+        } else {
+            $collection = @($script:State.workspace.PSObject.Properties[$section].Value)
+            if ($action -eq 'add') {
+                $sourceItem = $data.item
+                $fields = if ($section -eq 'workers') { @('name','role','area','contact') } elseif ($section -eq 'activities') { @('title','owner','due','done') } else { @('text','link','date') }
+                $record = [ordered]@{ id = [Guid]::NewGuid().ToString('N'); createdAt = (Get-Date).ToString('o'); updatedAt = (Get-Date).ToString('o'); createdBy = $script:CurrentActor; updatedBy = $script:CurrentActor }
+                foreach ($field in $fields) { if ($sourceItem.PSObject.Properties[$field]) { $record[$field] = $sourceItem.$field } }
+                if ($section -eq 'activities' -and -not $record.Contains('done')) { $record.done = $false }
+                $collection += [pscustomobject]$record
+                $script:State.workspace.$section = @($collection)
+                $recordLabel = if ($record.title) { $record.title } elseif ($record.name) { $record.name } else { $record.text }
+                Save-State ($section + ' agregado') ([string]$recordLabel)
+            } elseif ($action -in @('update','toggle','delete')) {
+                $recordId = [string]$data.id
+                $record = @($collection | Where-Object { $_.id -eq $recordId } | Select-Object -First 1)[0]
+                if (-not $record) { Send-Json $Context @{ error = 'El registro ya no existe; actualiza la pantalla.' } 409; return }
+                if ($action -eq 'delete') {
+                    $script:State.workspace.$section = @($collection | Where-Object { $_.id -ne $recordId })
+                    $recordLabel = if ($record.title) { $record.title } elseif ($record.name) { $record.name } else { $record.text }
+                    Save-State ($section + ' eliminado') ([string]$recordLabel)
+                } else {
+                    $beforeValues = @{}
+                    $fields = if ($section -eq 'workers') { @('name','role','area','contact') } elseif ($section -eq 'activities') { @('title','owner','due','done') } else { @('text','link','date') }
+                    foreach ($field in $fields) { $beforeValues[$field] = [string]$record.$field }
+                    if ($action -eq 'toggle') { $record.done = -not [bool]$record.done }
+                    if ($action -eq 'update') {
+                        foreach ($field in $fields) { if ($data.item.PSObject.Properties[$field]) { $record.$field = $data.item.$field } }
+                    }
+                    $record.updatedAt = (Get-Date).ToString('o'); $record.updatedBy = $script:CurrentActor
+                    $script:State.workspace.$section = @($collection)
+                    $recordLabel = if ($record.title) { $record.title } elseif ($record.name) { $record.name } else { $record.text }
+                    $changes = @($fields | Where-Object { [string]$record.$_ -cne $beforeValues[$_] } | ForEach-Object { $_ + ': ' + $beforeValues[$_] + ' -> ' + [string]$record.$_ })
+                    $detail = [string]$recordLabel
+                    if ($changes.Count) { $detail += ' | ' + ($changes -join '; ') }
+                    Save-State ($section + ' actualizado') $detail
+                }
+            } else { Send-Json $Context @{ error = 'AcciÃ³n no vÃ¡lida.' } 400; return }
+        }
+        Send-Json $Context @{ revision = [int]$script:State.revision; workspace = $script:State.workspace; auditLog = @($script:State.auditLog | Select-Object -Last 100 | Sort-Object at -Descending) }
+        return
+    }
     if ($method -eq 'GET' -and $path -eq '/api/project') {
         if (-not $user) { Send-Json $Context @{ error = 'Inicia sesión.' } 401; return }
         Send-Json $Context $script:State.project
@@ -218,8 +358,9 @@ function Handle-Request($Context) {
         $data = Read-Json $Context
         $displayName = ([string]$data.name).Trim()
         if ($displayName.Length -lt 2 -or $displayName.Length -gt 80) { Send-Json $Context @{ error = 'Escribe tu nombre completo.' } 400; return }
+        $previousName = [string]$user.displayName
         $user.displayName = $displayName
-        Save-State
+        Save-State 'Perfil actualizado' ($previousName + ' -> ' + $displayName)
         Send-Json $Context @{ ok = $true; displayName = $displayName }
         return
     }
@@ -233,7 +374,7 @@ function Handle-Request($Context) {
         $script:State.invitations = @($script:State.invitations | Where-Object { $_.email -ne $email })
         $code = [Guid]::NewGuid().ToString('N').Substring(0, 12).ToUpperInvariant()
         $script:State.invitations = @($script:State.invitations) + @([pscustomobject]@{ email = $email; code = $code; used = $false; created = (Get-Date).ToString('o') })
-        Save-State
+        Save-State 'Invitacion creada' $email
         Send-Json $Context @{ email = $email; code = $code }
         return
     }
@@ -258,7 +399,7 @@ function Handle-Request($Context) {
         if (-not $user) { Send-Json $Context @{ error = 'Inicia sesión con un correo autorizado para enviar.' } 403; return }
         $data = Read-Json $Context
         $files = @($data.files)
-        if ([string]::IsNullOrWhiteSpace([string]$data.title) -or $files.Count -lt 1 -or $files.Count -gt 5) { Send-Json $Context @{ error = 'Escribe un asunto y adjunta entre 1 y 5 archivos.' } 400; return }
+        if ([string]::IsNullOrWhiteSpace([string]$data.title) -or $files.Count -lt 1 -or $files.Count -gt 20) { Send-Json $Context @{ error = 'Escribe un asunto y adjunta entre 1 y 20 archivos.' } 400; return }
         $kind = if ([string]$data.kind -eq 'valuation') { 'valuation' } else { 'report' }
         $valuationNumber = ''; $valuationPeriod = ''; $valuationDue = ''; $plannedProgress = $null; $actualProgress = $null
         $conformityCategory = ''; $conformityDate = ''; $conformityDue = ''
@@ -291,7 +432,7 @@ function Handle-Request($Context) {
             $total += $bytes.Length
             $prepared += ,@{ name = $name; bytes = $bytes; size = $bytes.Length; id = [Guid]::NewGuid().ToString('N') }
         }
-        if ($total -gt 22000000) { Send-Json $Context @{ error = 'El total de archivos no puede superar 22 MB por envío.' } 400; return }
+        if ($total -gt 100000000) { Send-Json $Context @{ error = 'El total de archivos no puede superar 100 MB por envío.' } 400; return }
         $savedFiles = @()
         foreach ($file in $prepared) {
             [System.IO.File]::WriteAllBytes((Join-Path $script:UploadDir ($file.id + '.bin')), $file.bytes)
@@ -303,7 +444,8 @@ function Handle-Request($Context) {
         if (-not $responsibleUser) { Send-Json $Context @{ error = 'Selecciona un responsable con cuenta activa.' } 400; return }
         $item = [pscustomobject]@{ id = [Guid]::NewGuid().ToString('N'); kind = $kind; email = $user.email; submitterName = if ($user.displayName) { $user.displayName } else { $user.email }; responsibleEmail = $responsibleEmail; responsibleName = if ($responsibleUser.displayName) { $responsibleUser.displayName } else { $responsibleUser.email }; number = if ($kind -eq 'valuation') { $valuationNumber } else { ([string]$data.number).Trim() }; documentDate = if ($kind -eq 'valuation') { $valuationPeriod } elseif ($kind -eq 'conformity') { $conformityDate } else { [string]$data.documentDate }; valuationPeriod = $valuationPeriod; valuationDue = $valuationDue; plannedProgress = $plannedProgress; actualProgress = $actualProgress; conformityCategory = $conformityCategory; conformityDate = $conformityDate; conformityDue = $conformityDue; title = ([string]$data.title).Trim(); note = [string]$data.note; created = (Get-Date).ToString('o'); status = 'Pendiente'; review = ''; reviewed = ''; editAuthorized = $false; editRequestStatus = 'none'; editRequestNote = ''; files = $savedFiles }
         $script:State.submissions = @($script:State.submissions) + @($item)
-        Save-State
+        $auditAction = if ($kind -eq 'conformity') { 'Conformidad cargada' } elseif ($kind -eq 'valuation') { 'Valorizacion cargada' } else { 'Informe cargado' }
+        Save-State $auditAction $item.title
         Send-Json $Context @{ ok = $true; id = $item.id }
         return
     }
@@ -314,10 +456,11 @@ function Handle-Request($Context) {
         if (-not $item) { Send-Json $Context @{ error = 'No encuentro esa entrega.' } 404; return }
         $data = Read-Json $Context
         if ([string]$data.status -notin @('Aprobada','Observada') -or ([string]$data.status -eq 'Observada' -and [string]::IsNullOrWhiteSpace([string]$data.review))) { Send-Json $Context @{ error = 'Para observar, escribe el motivo.' } 400; return }
+        $previousStatus = [string]$item.status
         $item.status = [string]$data.status
         $item.review = ([string]$data.review).Trim()
         $item.reviewed = (Get-Date).ToString('o')
-        Save-State
+        Save-State 'Entrega revisada' ($item.title + ': ' + $previousStatus + ' -> ' + $item.status + '. ' + [string]$item.review)
         Send-Json $Context @{ ok = $true }
         return
     }
@@ -333,7 +476,7 @@ function Handle-Request($Context) {
         if ($reason.Length -lt 3) { Send-Json $Context @{ error = 'Explica brevemente qué necesitas corregir.' } 400; return }
         $item.editRequestStatus = 'pending'
         $item.editRequestNote = $reason
-        Save-State
+        Save-State 'Correccion solicitada' ($item.title + ' - ' + $reason)
         Send-Json $Context @{ ok = $true }
         return
     }
@@ -345,9 +488,10 @@ function Handle-Request($Context) {
         if ($item.editRequestStatus -ne 'pending') { Send-Json $Context @{ error = 'Esta entrega no tiene una solicitud pendiente.' } 409; return }
         $data = Read-Json $Context
         if ([string]$data.status -notin @('authorized','denied')) { Send-Json $Context @{ error = 'Elige autorizar o rechazar la solicitud.' } 400; return }
+        $previousDecision = [string]$item.editRequestStatus
         $item.editRequestStatus = [string]$data.status
         $item.editAuthorized = ([string]$data.status -eq 'authorized')
-        Save-State
+        Save-State 'Solicitud de correccion resuelta' ($item.title + ': ' + $previousDecision + ' -> ' + $item.editRequestStatus)
         Send-Json $Context @{ ok = $true }
         return
     }
@@ -358,10 +502,11 @@ function Handle-Request($Context) {
         if (-not $item -or $item.email -ne $user.email) { Send-Json $Context @{ error = 'No puedes modificar esta entrega.' } 404; return }
         if (-not $item.editAuthorized) { Send-Json $Context @{ error = 'El administrador todavía no autorizó la corrección.' } 403; return }
         $data = Read-Json $Context
+        $previousTitle = [string]$item.title
         $title = ([string]$data.title).Trim()
         if ($title.Length -lt 1) { Send-Json $Context @{ error = 'Escribe el asunto del informe.' } 400; return }
         $files = @($data.files)
-        if ($files.Count -gt 5) { Send-Json $Context @{ error = 'Puedes adjuntar hasta 5 archivos.' } 400; return }
+        if ($files.Count -gt 20) { Send-Json $Context @{ error = 'Puedes adjuntar hasta 20 archivos.' } 400; return }
         $allowed = @('.pdf','.doc','.docx','.xls','.xlsx','.ppt','.pptx','.jpg','.jpeg','.png','.webp','.txt','.csv')
         $prepared = @(); $total = 0
         foreach ($file in $files) {
@@ -372,7 +517,7 @@ function Handle-Request($Context) {
             $total += $bytes.Length
             $prepared += ,@{ name = $name; bytes = $bytes; size = $bytes.Length; id = [Guid]::NewGuid().ToString('N') }
         }
-        if ($total -gt 22000000) { Send-Json $Context @{ error = 'El total de archivos no puede superar 22 MB por envío.' } 400; return }
+        if ($total -gt 100000000) { Send-Json $Context @{ error = 'El total de archivos no puede superar 100 MB por envío.' } 400; return }
         $newFiles = @()
         foreach ($file in $prepared) {
             [System.IO.File]::WriteAllBytes((Join-Path $script:UploadDir ($file.id + '.bin')), $file.bytes)
@@ -390,7 +535,7 @@ function Handle-Request($Context) {
         $item.editAuthorized = $false
         $item.editRequestStatus = 'none'
         $item.editRequestNote = ''
-        Save-State
+        Save-State 'Entrega corregida' ($previousTitle + ' -> ' + $item.title)
         Send-Json $Context @{ ok = $true }
         return
     }
@@ -438,7 +583,7 @@ function Read-TcpContext($Client) {
     }
     $contentLength = 0
     if ($headers['Content-Length']) { $contentLength = [int]$headers['Content-Length'] }
-    if ($contentLength -gt 30000000) { throw 'El envío supera el máximo permitido.' }
+    if ($contentLength -gt 150000000) { throw 'El envío supera el máximo permitido.' }
     $body = New-Object byte[] $contentLength
     $offset = 0
     while ($offset -lt $contentLength) {
@@ -484,14 +629,25 @@ function Write-TcpResponse($Client, $Context) {
     if ($body.Length -gt 0) { $stream.Write($body, 0, $body.Length) }
     $stream.Flush()
 }
-$listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, 8765)
+$bindAddress = [System.Net.IPAddress]::Any
+if (-not [string]::IsNullOrWhiteSpace($env:CENTRO_CONTROL_BIND_ADDRESS)) { $bindAddress = [System.Net.IPAddress]::Parse($env:CENTRO_CONTROL_BIND_ADDRESS) }
+$listener = [System.Net.Sockets.TcpListener]::new($bindAddress, 8765)
 try {
     $listener.Start()
-    $networkIP = Get-NetIPConfiguration | Where-Object { $_.NetAdapter.Status -eq 'Up' -and $_.IPv4DefaultGateway } | ForEach-Object { $_.IPv4Address.IPAddress } | Select-Object -First 1
+    $networkIP = $null
+    try { $networkIP = Get-NetIPConfiguration | Where-Object { $_.NetAdapter.Status -eq 'Up' -and $_.IPv4DefaultGateway } | ForEach-Object { $_.IPv4Address.IPAddress } | Select-Object -First 1 } catch { $networkIP = $null }
+    if (-not $networkIP) {
+        if ($env:OS -eq 'Windows_NT') {
+            $ipconfigText = (& ipconfig.exe 2>$null) -join "`n"
+            $networkIP = [regex]::Matches($ipconfigText, '(?im)IPv4[^:\r\n]*:\s*((?:\d{1,3}\.){3}\d{1,3})') | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -ne '127.0.0.1' -and $_ -notlike '169.254.*' } | Select-Object -First 1
+        } else {
+            $networkIP = ((& hostname -I 2>$null) -split '\s+' | Where-Object { $_ -match '^(?!127\.)(?!169\.254\.)\d{1,3}(?:\.\d{1,3}){3}$' } | Select-Object -First 1)
+        }
+    }
     Write-Host 'Centro de control listo en esta computadora: http://localhost:8765'
     if ($networkIP) { Write-Host "Para la otra laptop conectada a la misma red Wi-Fi: http://${networkIP}:8765/" }
     Write-Host 'Deja esta ventana abierta mientras lo usas. Para apagarlo, presiona Ctrl+C.'
-    Start-Process 'http://localhost:8765/'
+    try { Start-Process 'http://localhost:8765/' } catch { Write-Host 'Abre el centro de control manualmente en http://localhost:8765/' }
     while ($true) {
         $client = $listener.AcceptTcpClient()
         $context = $null
