@@ -1,0 +1,48 @@
+{
+    "allowedEmails":  [
+                          "brandonlasteros31@gmail.com",
+                          "gledymedina02@gmail.com"
+                      ],
+    "invitations":  [
+                        {
+                            "email":  "gledymedina02@gmail.com",
+                            "code":  "444A0803B4E3",
+                            "used":  true,
+                            "created":  "2026-10-29T12:38:38.0768179-05:00"
+                        }
+                    ],
+    "users":  [
+                  {
+                      "email":  "brandonlasteros31@gmail.com",
+                      "salt":  "GOOxhLdTV67VRQi43y+f5g==",
+                      "hash":  "f+OVq5qmPgW7gpf6mnUrIyweg2iM1ZF/Sicd3MN6tqU=",
+                      "role":  "admin",
+                      "created":  "2026-10-29T11:59:03.6252177-05:00"
+                  },
+                  {
+                      "email":  "gledymedina02@gmail.com",
+                      "displayName":  "gledymedina",
+                      "salt":  "70FoRCadrSlmOIdO01nHWw==",
+                      "hash":  "H4V7oWi2Fel7DKPyO07nn+5tSOWyKCM9z2Y6voCy7l4=",
+                      "role":  "staff",
+                      "created":  "2026-10-29T12:40:03.4865776-05:00"
+                  }
+              ],
+    "submissions":  [
+
+                    ],
+    "project":  {
+                    "name":  "PROYECTO: \"CREACION DE COMPLEJO DEPORTIVO EN EL ANEXO BELLAVISTA, DISTRITO DE POLOBAYA, PROVINCIA DE AREQUIPA, DEPARTAMENTO DE AREQUIPA\"",
+                    "entity":  "MUNICIPALIDAD DISTRITAL DE POLOBAYA",
+                    "code":  "",
+                    "cutoff":  "2026-10-29",
+                    "description":  "",
+                    "departmentCode":  "04",
+                    "department":  "AREQUIPA",
+                    "provinceCode":  "0401",
+                    "province":  "AREQUIPA",
+                    "districtCode":  "040114",
+                    "district":  "POLOBAYA",
+                    "location":  "POLOBAYA, AREQUIPA, AREQUIPA"
+                }
+}

@@ -1,0 +1,147 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Centro de control</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#EEF1F5;--cd:#fff;--bd:#D8DEE7;--tx:#1B2638;--mu:#667389;--nv:#12284B;--ac:#2F7FE0;--yl:#FFF6D6;--ok:#1E9E6A;--bad:#E0484C;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0F1522;--cd:#18202F;--bd:#2B3548;--tx:#E6EBF3;--mu:#97A3B8;--nv:#0A1830;--yl:#3A3416}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 'IBM Plex Sans',system-ui,sans-serif;font-variant-numeric:tabular-nums}
+button,select,input,textarea{font:inherit;color:inherit}button{cursor:pointer;border:1px solid var(--bd);background:var(--cd);border-radius:6px;padding:6px 11px}button:hover{border-color:var(--ac)}button.pr{background:var(--ac);border-color:var(--ac);color:#fff}
+.top{background:var(--nv);color:#fff;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px}.top b{font-size:17px}.top span{opacity:.75}.sp{flex:1}.top select,.top button{background:#1F3A66;border-color:#34568C;color:#fff}
+.tabs{display:flex;gap:4px;padding:10px 16px 0;flex-wrap:wrap}.tabs button{border-radius:6px 6px 0 0;border-bottom:0;color:var(--mu)}.tabs button.on{background:var(--cd);color:var(--tx);font-weight:600;box-shadow:inset 0 3px var(--ac)}
+main{padding:0 16px 24px;max-width:1280px;margin:0 auto}.pg{display:none;background:transparent}.pg.on{display:block}
+.card{background:var(--cd);border:1px solid var(--bd);border-radius:8px;padding:14px;margin-top:12px}.card h3{margin:0 0 8px;font-size:15px}.mu{color:var(--mu)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.lay{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:12px;align-items:start}
+label{display:block;font-weight:500;margin:8px 0 3px}input[type=text],input[type=date],textarea{width:100%;border:1px solid var(--bd);border-radius:6px;padding:7px;background:var(--bg)}textarea{min-height:130px;resize:vertical}
+.rw{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.bar{height:8px;background:var(--bd);border-radius:4px;overflow:hidden;margin:6px 0}.bar i{display:block;height:100%;background:var(--ok)}
+.al{border-left:4px solid var(--bad);background:var(--cd);border:1px solid var(--bd);border-left:4px solid var(--bad);border-radius:6px;padding:10px}
+.row{display:grid;grid-template-columns:28px 52px minmax(0,2fr) 1fr 92px 108px minmax(0,2fr);gap:8px;padding:9px 6px;border-bottom:1px solid var(--bd);align-items:start}.row.nv{background:var(--yl)}.row.hd{font-weight:600;color:var(--mu);background:none}
+.pill{display:inline-block;color:#fff;border-radius:10px;padding:1px 9px;font-size:12px;white-space:nowrap}.chg{display:block;color:var(--ac);font-size:12px;margin-top:3px}.q{color:var(--mu);font-size:12px;font-style:italic}
+.cb{display:grid;grid-template-columns:110px 1fr 22px;gap:6px;align-items:center;margin:4px 0;font-size:13px}.cb .bar{margin:0}
+.kpi{font-size:28px;font-weight:600}.kpi small{display:block;font-size:12px;font-weight:400;color:var(--mu)}.kp5{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:12px}.kp5 .card{margin:0}
+.cv{position:relative;height:250px}.warn{background:var(--yl);border:1px solid #E0B94A;border-radius:6px;padding:8px 10px;margin-top:12px}
+ul{margin:4px 0;padding-left:18px}.ov{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:16px;z-index:9}.ov.on{display:flex}.ov .card{width:min(720px,100%);margin:0}
+#toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--nv);color:#fff;padding:8px 14px;border-radius:6px;display:none;z-index:10}
+@media(max-width:900px){.lay,.g2,.g3{grid-template-columns:1fr}.kp5{grid-template-columns:1fr 1fr}.row{grid-template-columns:28px 1fr}.row>*:nth-child(n+3){grid-column:2}.row.hd{display:none}}
+@media print{.top,.tabs,.noprint,#p1,#p2{display:none!important}#p3{display:block!important}body{background:#fff}}
+</style></head><body>
+<header class="top"><b>Centro de control</b><span id="pn"></span><div class="sp"></div>
+<select id="ws" onchange="S.wk=+this.value;save();render()"></select><button onclick="addW()">+ Semana</button>
+<select id="md" onchange="setM(this.value)"><option value="demo">Caso de ejemplo</option><option value="mine">Mi proyecto</option></select></header>
+<nav class="tabs"><button data-t="1">1 Fuentes</button><button data-t="2">2 Control</button><button data-t="3">3 Informe</button><button data-t="4">4 Entregas</button></nav>
+<main>
+<section class="pg" id="p1"><div class="card"><div class="g2"><div><label>Proyecto</label><input type="text" id="nm" oninput="setF('name',this.value)"><label>Fecha de corte</label><input type="date" id="ct" oninput="W().corte=this.value;save()"></div>
+<div><label>Equipo (una persona por línea: nombre · rol)</label><textarea id="tm" style="min-height:96px" oninput="setF('team',this.value)"></textarea></div></div></div>
+<div class="card"><h3>Fuentes de la semana</h3><div class="g2"><div><label>Acta</label><textarea id="sa" oninput="setS('a',this.value)"></textarea></div><div><label>Correos</label><textarea id="sc" oninput="setS('c',this.value)"></textarea></div><div><label>Chat exportado</label><textarea id="sh" oninput="setS('h',this.value)"></textarea></div><div><label>Otras notas</label><textarea id="sn" oninput="setS('n',this.value)"></textarea></div></div>
+<div class="rw"><button class="pr" onclick="cp(mkP())">Copiar para la IA</button><label style="margin:0;font-weight:400"><input type="checkbox" id="inc" checked> incluir instrucciones</label><button onclick="cp(INS)">Copiar instrucciones del asistente</button></div></div>
+<div class="card"><h3>Datos</h3><p class="mu" style="margin:0">Todo se guarda en este navegador. Nada sale salvo lo que copias.</p><div class="rw"><button onclick="expJ()">Exportar (.json)</button><button onclick="openM('json')">Importar (.json)</button><button id="rd" onclick="S.demo=demo();S.wk=0;save();render();toast('Demo reiniciada')">Reiniciar demo</button></div></div></section>
+
+<section class="pg" id="p2"><div class="rw"><button class="pr" onclick="openM('ia')">Pegar respuesta de la IA</button><button onclick="openM('csv')">Importar registro CSV / Excel</button><div class="sp"></div><button onclick="valAll(1)">Validar todo</button><button onclick="valAll(0)">Quitar validación</button></div>
+<div class="card" id="prog"></div><div class="g3" id="als" style="margin-top:12px"></div>
+<div class="lay"><div class="card" style="padding:0" id="tbl"></div><aside class="card" id="cor"></aside></div></section>
+
+<section class="pg" id="p3"><div id="wrn"></div><div class="kp5" id="kp"></div>
+<div class="card"><h3>Reglas de cálculo</h3><p class="mu" style="margin:0">Vencido: fecha límite ≤ fecha de corte (sin fecha no cuenta). En fecha: cumplida con cumplimiento ≤ límite. Cumplida sin fecha de cumplimiento cuenta en el total, no en fecha.</p><p id="chk" style="margin:8px 0 0;font-weight:600"></p></div>
+<div class="g2"><div class="card"><h3>Tendencia semanal</h3><div class="cv"><canvas id="c1"></canvas></div></div><div class="card"><h3>Estado de los compromisos</h3><div class="cv"><canvas id="c2"></canvas></div></div></div>
+<div class="card"><h3>Vencidos por persona</h3><div class="cv"><canvas id="c3"></canvas></div></div>
+<div class="card"><h3>Lectura para dirección</h3><p id="lec" style="margin:0"></p></div>
+<div class="card" style="padding:0" id="vt"></div><div class="rw noprint"><button class="pr" onclick="window.print()">Imprimir / PDF</button></div></section>
+<section class="pg" id="p4"><div id="shareRoot"></div></section>
+</main>
+<div class="ov" id="ov"><div class="card"><h3 id="mh"></h3><p class="mu" id="mp" style="margin:0 0 6px"></p><textarea id="mt" style="min-height:240px"></textarea><input type="file" id="mf" accept=".csv,.tsv,.txt,.json" class="noprint" style="margin-top:6px"><p id="me" style="color:var(--bad);margin:6px 0 0"></p><div class="rw"><button class="pr" onclick="applyM()">Importar</button><button onclick="$('ov').classList.remove('on')">Cancelar</button></div></div></div>
+<div id="toast"></div>
+<script>
+const $=id=>document.getElementById(id),ST='cc_v1',ES=['pendiente','en curso','cumplida','retrasada','desaparecida','contradicha'];
+const COL={cumplida:'#1E9E6A','en curso':'#2F7FE0',pendiente:'#A0AAB8',retrasada:'#F09A2D',desaparecida:'#E0484C',contradicha:'#8257E6'};
+const K=['codigo','compromiso','responsable','fecha_limite','origen','cita','estado','evidencia','fecha_cumplimiento','depende_de','observaciones','alerta','motivo_alerta'];
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const INS=`ASISTENTE DE CONTROL · equipo de proyecto AEC. Trabajas en tres roles, en este orden: 1) CONTROLADOR: registro de compromisos completo, verdadero y trazable. 2) COORDINADOR: conviertes el registro en acción. 3) REPORTERO: calculas el cumplimiento y lo explicas a dirección en dos frases. Tú propones; la persona usuaria valida cada fila. Cada estado se apoya en una cita real. Usa solo lo que está en las fuentes y el registro: si falta, «SIN DUEÑO», fecha vacía o «sin evidencia».
+
+RECIBES: FECHA DE CORTE (si no viene, usa hoy y dilo), FUENTES de la semana y REGISTRO ANTERIOR validado (JSON).
+
+1 · CONTROLADOR
+- Compromiso = alguien se compromete a hacer algo. Códigos C-01, C-02… continuando el registro anterior. Nunca dupliques un código ni borres filas.
+- «Habría que…» sin responsable ni fecha → "ideas". «X propone…» a la espera de decisión → "decisiones". Los compromisos pueden nacer en correo o chat.
+- Responsable: nombre y apellido; si nadie lo asumió, "SIN DUEÑO". Si cambia, anótalo en observaciones.
+- Fecha límite: la ORIGINAL; nunca la cambies. Una fecha nueva va en observaciones: «Nueva fecha: AAAA-MM-DD (fuente)».
+- Fechas relativas: «hoy mismo o mañana» → mañana · «esta semana» → viernes de esa semana · «la semana que viene» → viernes de la semana siguiente · «cuanto antes», «pronto» o sin fecha → vacía.
+- Fecha de cumplimiento: solo la que diga la evidencia; si no, vacía y «sin evidencia de fecha» en observaciones. Nunca la inventes.
+- Estados (solo estos): pendiente (no ha vencido, sin noticias) · en curso (hay avance y no ha vencido, o sin fecha) · cumplida (evidencia de que se hizo) · retrasada (venció y hay avance parcial, fecha nueva reconocida o admiten que no se hizo) · desaparecida (venció y ninguna fuente lo vuelve a mencionar) · contradicha (dos fuentes incompatibles; no cuenta como cumplida). Vencido = fecha límite ≤ fecha de corte.
+- Alertas: EXACTAMENTE 3 filas, las más graves (contradicciones, desaparecidos, sin dueño, bloqueos en cadena). Un bloqueo se marca en el compromiso que desbloquea la cadena. Motivo en una línea con la cita.
+
+2 · COORDINADOR
+- Abierto = estado distinto de «cumplida». Carga = abiertos por persona; sobrecarga si más de 5. Lista los SIN DUEÑO. Cadenas de bloqueo (ej. "C-19 → C-07 → C-08"). Propuesta: 1 a 3 acciones concretas. Orden del día: primero contradicho y desaparecido, luego bloqueos, luego lo que vence esta semana; minutos por punto, total máximo 60.
+
+3 · REPORTERO
+- Vencidos = fecha límite ≤ fecha de corte (sin fecha no cuentan). Cumplidos en fecha = cumplida y fecha de cumplimiento ≤ fecha límite. Cumplida sin fecha de cumplimiento no cuenta en fecha (sí en total). % en fecha = cumplidos en fecha ÷ vencidos; % total = cumplidos ÷ vencidos (un decimal). Lectura: dos frases, con cifras y sin adjetivos.
+
+ENTREGAS, en este orden: A) Resumen legible de máximo 8 líneas (nuevos, cambios de estado, las 3 alertas con su cita, % en fecha, propuesta principal). B) UN único bloque de código json, válido y sin comentarios, con este esquema:
+{"semana":2,"fecha_corte":"AAAA-MM-DD","registro":[{"codigo":"C-01","compromiso":"verbo + objeto, máx. 10 palabras","responsable":"Nombre Apellido | SIN DUEÑO","fecha_limite":"AAAA-MM-DD o vacío","origen":"Acta NN | Correo | Chat","cita":"frase literal","estado":"pendiente | en curso | cumplida | retrasada | desaparecida | contradicha","evidencia":"fuente, fecha y «cita»","fecha_cumplimiento":"AAAA-MM-DD o vacío","depende_de":"C-xx o vacío","observaciones":"","alerta":true,"motivo_alerta":""}],"ideas":[],"decisiones":[],"coordinador":{"carga":[{"persona":"","abiertos":["C-01"]}],"sin_dueno":[],"cadenas":[],"propuesta":[],"orden_del_dia":[{"tema":"","minutos":10}]},"reportero":{"vencidos":0,"cumplidos_en_fecha":0,"cumplidos_total":0,"pct_en_fecha":0,"pct_total":0,"lectura":""}}
+El "registro" incluye TODOS los compromisos (anteriores y nuevos).
+ANTES DE RESPONDER COMPRUEBA: cada fila con cita y fuente · sin códigos duplicados · ninguna fecha límite original cambiada · exactamente 3 alertas · cifras del Reportero cuadradas con el registro · JSON válido.`;
+let S,CH={},T=2,MK='';
+const today=()=>new Date().toISOString().slice(0,10);
+const R=(c,t,r,fl,o,ci,e,ev,fc,dep,ob,al,m)=>({codigo:c,compromiso:t,responsable:r,fecha_limite:fl,origen:o,cita:ci,estado:e,evidencia:ev,fecha_cumplimiento:fc,depende_de:dep,observaciones:ob,alerta:al,motivo_alerta:m});
+function mk(){return{name:'',team:'',weeks:[{corte:today(),src:{a:'',c:'',h:'',n:''},data:null,val:{}}]}}
+function demo(){const rows=[
+R('C-01','Entregar planos de cimentación rev B','Marcos Ruiz','2026-10-09','Acta 01','Marcos entrega la cimentación rev B el viernes 9','cumplida','Correo 2026-10-08: «Adjunto cimentación rev B»','2026-10-08','','',false,''),
+R('C-02','Validar cálculo de losas','Marcos Ruiz','2026-10-14','Acta 01','Marcos valida las losas antes del miércoles 14','cumplida','Chat 2026-10-15: «Losas validadas»','2026-10-15','','',false,''),
+R('C-03','Coordinar interferencias MEP en el modelo BIM','Iván Soto','2026-10-13','Acta 01','Iván coordina las interferencias MEP el 13','retrasada','Chat 2026-10-14: «Lo paso a la semana que viene»','','','Nueva fecha: 2026-10-23 (Chat)',true,'Bloquea C-04: «Lo paso a la semana que viene»'),
+R('C-04','Emitir planos de instalaciones','Lucía Pérez','2026-10-30','Acta 01','Lucía emite instalaciones el 30 de octubre','pendiente','Sin noticias desde el acta','','C-03','',false,''),
+R('C-05','Solicitar la licencia de obra','SIN DUEÑO','2026-10-12','Acta 01','Alguien tiene que pedir la licencia antes del 12','desaparecida','Ninguna fuente la menciona desde Acta 01','','','sin evidencia de fecha',true,'Nadie la asumió y ya venció'),
+R('C-06','Actualizar el cronograma maestro','Ana Torres','2026-10-16','Acta 01','Ana actualiza el cronograma el 16','en curso','Correo 2026-10-14: «Voy por la mitad»','','','',false,''),
+R('C-07','Confirmar la partida de acero con el proveedor','Ana Torres','2026-10-14','Acta 01','Ana confirma el acero el 14','contradicha','Acta 01 dice confirmado; Chat 2026-10-15: «El proveedor no ha respondido»','','','',true,'Dos fuentes incompatibles sobre el acero')];
+const c='2026-10-15',x=calc(rows,c);
+const w1={corte:c,src:{a:'',c:'',h:'',n:''},data:{registro:rows,ideas:['Revisar la planta de residuos'],decisiones:['Elegir proveedor de fachada (Ana propone)'],coordinador:{cadenas:['C-03 → C-04'],propuesta:['Asignar C-05 a Ana Torres hoy: desbloquea la licencia','Mover C-03 a Lucía Pérez para liberar C-04'],orden_del_dia:[{tema:'C-07 acero: contradicho',minutos:10},{tema:'C-05 licencia sin dueño',minutos:10},{tema:'C-03 bloquea C-04',minutos:15}]},reportero:{pct_en_fecha:x.pf,pct_total:x.pt,lectura:'Vencidos: '+x.v.length+'; cumplidos en fecha: '+x.f+' ('+x.pf+' %). Cumplidos en total: '+x.t+' ('+x.pt+' %).'}},val:{}};
+const w2={corte:'2026-10-22',src:{a:'Acta 02 (2026-10-22). Iván Soto: el modelo BIM con las interferencias queda listo el 23. Lucía Pérez emite los planos de instalaciones el 30. Ana Torres confirma el acero mañana. Nadie asume la licencia de obra.',c:'Correo Marcos Ruiz 2026-10-20: «Envío el detalle de armaduras el viernes 23».',h:'Ana Torres: el proveedor dice que el acero llega el 5/11.',n:''},data:null,val:{}};
+return{name:'Edificio Residencial Los Álamos',team:'Ana Torres · Jefa de proyecto\nMarcos Ruiz · Estructuras\nLucía Pérez · Instalaciones\nIván Soto · Coordinador BIM',weeks:[w1,w2]}}
+function load(){try{S=JSON.parse(localStorage.getItem(ST))}catch(e){}if(!S||!S.demo)S={mode:'demo',wk:0,demo:demo(),mine:mk()}}
+function save(){try{localStorage.setItem(ST,JSON.stringify(S))}catch(e){}}
+const P=()=>S[S.mode],W=()=>P().weeks[S.wk],vrows=w=>(w.data?w.data.registro:[]).filter(r=>w.val[r.codigo]);
+function calc(rows,c){const v=rows.filter(r=>r.fecha_limite&&r.fecha_limite<=c),f=v.filter(r=>r.estado=='cumplida'&&r.fecha_cumplimiento&&r.fecha_cumplimiento<=r.fecha_limite).length,t=v.filter(r=>r.estado=='cumplida').length,p=n=>v.length?Math.round(n/v.length*1000)/10:0;return{v,f,t,pf:p(f),pt:p(t)}}
+function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',2200)}
+function cp(t){const ok=()=>toast('Copiado al portapapeles');const fb=()=>{const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');ok()}catch(e){toast('No se pudo copiar')}a.remove()};navigator.clipboard?navigator.clipboard.writeText(t).then(ok,fb):fb()}
+function mkP(){const p=P(),w=W(),prev=S.wk>0?vrows(p.weeks[S.wk-1]):[],s=w.src,any=s.a||s.c||s.h||s.n;return($('inc').checked?INS+'\n\n=====\n':'')+`PROYECTO: ${p.name}\nSEMANA: ${S.wk+1}\nFECHA DE CORTE: ${w.corte}\nEQUIPO:\n${p.team}\n\nREGISTRO ANTERIOR VALIDADO:\n${JSON.stringify(prev)}\n\nFUENTES DE LA SEMANA:\n`+(any?`--- ACTA ---\n${s.a}\n--- CORREOS ---\n${s.c}\n--- CHAT ---\n${s.h}\n--- OTRAS NOTAS ---\n${s.n}`:'(las fuentes van adjuntas en este mensaje)')}
+function setF(k,v){P()[k]=v;save();$('pn').textContent=P().name||''}function setS(k,v){W().src[k]=v;save()}
+function setM(m){S.mode=m;S.wk=Math.min(S.wk,P().weeks.length-1);save();render()}
+function addW(){const p=P();p.weeks.push({corte:today(),src:{a:'',c:'',h:'',n:''},data:null,val:{}});S.wk=p.weeks.length-1;save();render();T=1;tab()}
+function tab(){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',+b.dataset.t==T));[1,2,3].forEach(i=>$('p'+i).classList.toggle('on',i==T));if(T==3)rRep()}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{T=+b.dataset.t;tab()});
+function render(){const p=P(),w=W();$('pn').textContent=p.name||'';$('md').value=S.mode;$('ws').innerHTML=p.weeks.map((x,i)=>`<option value="${i}"${i==S.wk?' selected':''}>S${i+1}</option>`).join('');$('nm').value=p.name;$('tm').value=p.team;$('ct').value=w.corte;['a','c','h','n'].forEach(k=>$('s'+k).value=w.src[k]);$('rd').hidden=S.mode!='demo';rCtl();tab()}
+function valAll(on){const w=W();if(!w.data)return;w.val={};if(on)w.data.registro.forEach(r=>w.val[r.codigo]=true);save();rCtl();rRep()}
+function tog(c,on){W().val[c]=on;save();rCtl();rRep()}
+const ul=a=>a&&a.length?'<ul>'+a.map(x=>`<li>${esc(typeof x=='string'?x:JSON.stringify(x))}</li>`).join('')+'</ul>':'<p class="mu" style="margin:2px 0">—</p>';
+function chg(r,pv){const p=pv.find(x=>x.codigo==r.codigo);if(!p)return 'nuevo';const o=[];if(p.estado!=r.estado)o.push(p.estado+' → '+r.estado);if(p.responsable!=r.responsable)o.push('responsable: '+p.responsable+' → '+r.responsable);if(p.fecha_limite!=r.fecha_limite)o.push('⚠ fecha límite original modificada');return o.join(' · ')}
+function rCtl(){const w=W(),rows=w.data?w.data.registro:[],pv=S.wk>0?vrows(P().weeks[S.wk-1]):[],nv=rows.filter(r=>w.val[r.codigo]).length;
+$('prog').innerHTML=rows.length?`<b>${nv} de ${rows.length} filas validadas</b><div class="bar"><i style="width:${nv/rows.length*100}%"></i></div>`:'<span class="mu">Aún no hay registro. Pega la respuesta de la IA o importa un CSV.</span>';
+$('als').innerHTML=rows.filter(r=>r.alerta).slice(0,3).map(r=>`<div class="al"><b>${esc(r.codigo)}</b> ${esc(r.compromiso)}<br><small>${esc(r.motivo_alerta)}</small></div>`).join('');
+$('tbl').innerHTML=rows.length?`<div class="row hd"><span></span><span>Código</span><span>Compromiso y cita</span><span>Responsable</span><span>Límite</span><span>Estado</span><span>Evidencia</span></div>`+rows.map(r=>{const c=S.wk>0||1?chg(r,pv):'';return `<div class="row${w.val[r.codigo]?'':' nv'}"><input type="checkbox" aria-label="Validar ${esc(r.codigo)}" ${w.val[r.codigo]?'checked':''} onchange="tog('${esc(r.codigo)}',this.checked)"><b>${esc(r.codigo)}</b><div>${esc(r.compromiso)}<div class="q">«${esc(r.cita)}» · ${esc(r.origen)}</div><span class="chg">${esc(c)}</span></div><div>${esc(r.responsable)}</div><div>${esc(r.fecha_limite)||'<span class="mu">SIN FECHA</span>'}</div><div><span class="pill" style="background:${COL[r.estado]||'#999'}">${esc(r.estado)}</span></div><div>${esc(r.evidencia)}<div class="mu">${esc(r.observaciones)}</div></div></div>`}).join(''):'';
+const ab=rows.filter(r=>r.estado!='cumplida'),pc={};ab.forEach(r=>{if(r.responsable&&r.responsable!='SIN DUEÑO')(pc[r.responsable]=pc[r.responsable]||[]).push(r.codigo)});const mx=Math.max(6,...Object.values(pc).map(a=>a.length)),sd=rows.filter(r=>r.responsable=='SIN DUEÑO').map(r=>r.codigo),co=(w.data&&w.data.coordinador)||{},od=co.orden_del_dia||[],tot=od.reduce((s,x)=>s+(+x.minutos||0),0),d=w.data||{};
+$('cor').innerHTML=`<h3>Coordinador</h3><b>Carga de abiertos</b>`+(Object.keys(pc).map(k=>`<div class="cb"><span>${esc(k)}</span><div class="bar"><i style="width:${pc[k].length/mx*100}%;background:${pc[k].length>5?'var(--bad)':'var(--ac)'}"></i></div><b>${pc[k].length}</b></div>`).join('')||'<p class="mu" style="margin:2px 0">—</p>')+`<p><b>Sin dueño</b></p>${ul(sd)}<b>Cadenas de bloqueo</b>${ul(co.cadenas)}<b>Propuesta</b>${ul(co.propuesta)}<b>Orden del día · ${tot} min</b>${tot>60?'<div style="color:var(--bad)">Supera los 60 minutos</div>':''}${ul(od.map(x=>x.minutos+' min · '+x.tema))}<b>Decisiones</b>${ul(d.decisiones)}<b>Ideas</b>${ul(d.ideas)}`}
+function ch(id,cfg){if(typeof Chart=='undefined')return;if(CH[id])CH[id].destroy();Chart.defaults.color=getComputedStyle(document.documentElement).getPropertyValue('--mu');CH[id]=new Chart($(id),cfg)}
+function rRep(){const p=P(),w=W(),all=w.data?w.data.registro:[],rows=vrows(w),x=calc(rows,w.corte),ab=rows.filter(r=>r.estado!='cumplida').length,al=rows.filter(r=>r.alerta).length,miss=all.length-rows.length;
+$('wrn').innerHTML=miss?`<div class="warn">Faltan ${miss} filas por validar: no cuentan en este informe.</div>`:'';
+$('kp').innerHTML=[['% cumplido en fecha',x.pf+' %'],['% cumplido total',x.pt+' %'],['Vencidos',x.v.length],['Abiertos',ab],['Alertas',al]].map(a=>`<div class="card"><div class="kpi">${a[1]}<small>${a[0]}</small></div></div>`).join('');
+const rp=w.data&&w.data.reportero,c=$('chk');if(!rp||rp.pct_en_fecha==null){c.textContent='Sin cifras de la IA para comparar.';c.style.color=''}else if(miss||!rows.length){c.textContent='Valida todas las filas para comprobar la cifra de la IA ('+rp.pct_en_fecha+' %).';c.style.color=''}else if(Math.abs(rp.pct_en_fecha-x.pf)<0.15){c.textContent='✓ cuadra: IA '+rp.pct_en_fecha+' % · panel '+x.pf+' %';c.style.color='var(--ok)'}else{c.textContent='✗ revisa antes de enviar: IA '+rp.pct_en_fecha+' % · panel '+x.pf+' %';c.style.color='var(--bad)'}
+$('lec').textContent=(rp&&rp.lectura)||'Sin lectura de la IA.';
+const tr=p.weeks.map(k=>calc(vrows(k),k.corte));ch('c1',{type:'line',data:{labels:p.weeks.map((k,i)=>'S'+(i+1)),datasets:[{label:'% en fecha',data:tr.map(t=>t.pf),borderColor:'#2F7FE0',tension:.2},{label:'% total',data:tr.map(t=>t.pt),borderColor:'#1E9E6A',tension:.2},{label:'Objetivo 80 %',data:tr.map(()=>80),borderColor:'#F09A2D',borderDash:[6,4],pointRadius:0}]},options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}}}});
+const cn=ES.map(e=>rows.filter(r=>r.estado==e).length);ch('c2',{type:'doughnut',data:{labels:ES,datasets:[{data:cn,backgroundColor:ES.map(e=>COL[e])}]},options:{maintainAspectRatio:false}});
+const ps=[...new Set(x.v.map(r=>r.responsable))],fe=r=>r.estado=='cumplida'&&r.fecha_cumplimiento&&r.fecha_cumplimiento<=r.fecha_limite,n=(f)=>ps.map(q=>x.v.filter(r=>r.responsable==q&&f(r)).length);
+ch('c3',{type:'bar',data:{labels:ps,datasets:[{label:'En fecha',data:n(fe),backgroundColor:'#1E9E6A'},{label:'Tarde o sin fecha',data:n(r=>r.estado=='cumplida'&&!fe(r)),backgroundColor:'#F09A2D'},{label:'Sin cumplir',data:n(r=>r.estado!='cumplida'),backgroundColor:'#E0484C'}]},options:{maintainAspectRatio:false,scales:{x:{stacked:true},y:{stacked:true,ticks:{precision:0}}}}});
+const nc=x.v.filter(r=>!fe(r));$('vt').innerHTML=`<h3 style="padding:14px 14px 0">Vencidos sin cumplir en fecha</h3>`+(nc.length?nc.map(r=>`<div class="row" style="grid-template-columns:52px minmax(0,2fr) 1fr 92px 108px"><b>${esc(r.codigo)}</b><div>${esc(r.compromiso)}</div><div>${esc(r.responsable)}</div><div>${esc(r.fecha_limite)}</div><div><span class="pill" style="background:${COL[r.estado]}">${esc(r.estado)}</span></div></div>`).join(''):'<p class="mu" style="padding:0 14px 14px">Ninguno.</p>')}
+function openM(k){MK=k;$('mt').value='';$('me').textContent='';$('mf').value='';$('mh').textContent={ia:'Pegar respuesta de la IA',csv:'Importar registro CSV / Excel',json:'Importar proyecto (.json)'}[k];$('mp').textContent={ia:'Pega la respuesta completa. Busco el bloque json.',csv:'Pega las filas copiadas de Excel o sube un CSV (separador ; , o tabulador). Las columnas se reconocen por nombre.',json:'Pega el JSON exportado o sube el archivo. Reemplaza Mi proyecto.'}[k];$('ov').classList.add('on')}
+$('mf').onchange=e=>{const f=e.target.files[0];if(f)f.text().then(t=>$('mt').value=t)};
+function norm(r){const o={};K.forEach(k=>o[k]=k=='alerta'?r[k]===true||/^(true|si|sí|1|x)$/i.test(String(r[k]||'')):String(r[k]==null?'':r[k]).trim());o.estado=o.estado.toLowerCase();return o}
+function chkRows(a){const s={};a.forEach((r,i)=>{if(!r.codigo)throw new Error('La fila '+(i+1)+' no tiene código.');if(s[r.codigo])throw new Error('Código duplicado: '+r.codigo);s[r.codigo]=1;if(!ES.includes(r.estado))throw new Error(r.codigo+': estado no válido «'+r.estado+'». Usa: '+ES.join(', ')+'.')})}
+function impIA(t){const m=t.match(/```(?:json)?\s*([\s\S]*?)```/i);let s=m&&m[1].indexOf('{')>=0?m[1]:null;if(!s){const a=t.indexOf('{'),b=t.lastIndexOf('}');if(a<0||b<a)throw new Error('No encuentro ningún bloque JSON. Pide a la IA el bloque json completo.');s=t.slice(a,b+1)}
+let o;try{o=JSON.parse(s.replace(/,(\s*[}\]])/g,'$1'))}catch(e){throw new Error('El JSON no es válido ('+e.message+'). Revisa que la respuesta no esté cortada.')}
+if(!Array.isArray(o.registro))throw new Error('Falta la lista "registro" en el JSON.');o.registro=o.registro.map(norm);chkRows(o.registro);const w=W();w.data=o;w.val={};if(/^\d{4}-\d\d-\d\d$/.test(o.fecha_corte||''))w.corte=o.fecha_corte}
+function csvP(t){const l=t.split(/\r?\n/)[0],d=[';',',','\t'].map(x=>[x,l.split(x).length]).sort((a,b)=>b[1]-a[1])[0][0],out=[];let r=[],c='',q=false;for(let i=0;i<t.length;i++){const h=t[i];if(q){if(h=='"'){if(t[i+1]=='"'){c+='"';i++}else q=false}else c+=h}else if(h=='"')q=true;else if(h==d){r.push(c);c=''}else if(h=='\n'||h=='\r'){if(h=='\r'&&t[i+1]=='\n')i++;r.push(c);c='';out.push(r);r=[]}else c+=h}if(c||r.length){r.push(c);out.push(r)}return out.filter(x=>x.some(y=>y.trim()))}
+function impCsv(t){const a=csvP(t);if(a.length<2)throw new Error('Necesito una fila de encabezados y al menos una fila de datos.');const nm=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,''),h=a[0].map(nm);if(!h.includes('codigo')||!h.includes('estado'))throw new Error('Faltan las columnas «codigo» y «estado» en los encabezados.');
+const rows=a.slice(1).map(c=>{const o={};h.forEach((k,i)=>{if(K.includes(k))o[k]=c[i]});return norm(o)});chkRows(rows);const w=W();w.data={registro:rows,ideas:[],decisiones:[],coordinador:{},reportero:null};w.val={}}
+function impJson(t){let o;try{o=JSON.parse(t)}catch(e){throw new Error('JSON no válido: '+e.message)}if(!o.weeks||!o.weeks.length)throw new Error('El archivo no tiene semanas ("weeks").');S.mine=o;S.mode='mine';S.wk=0}
+function applyM(){const t=$('mt').value;try{if(!t.trim())throw new Error('No hay nada que importar.');({ia:impIA,csv:impCsv,json:impJson})[MK](t);$('ov').classList.remove('on');save();render();if(MK!='json'){T=2;tab()}toast('Importado')}catch(e){$('me').textContent=e.message}}
+function expJ(){const j=JSON.stringify(S.mine,null,1);cp(j);try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([j],{type:'application/json'}));a.download='mi-proyecto.json';a.click()}catch(e){}}
+load();render();
+</script><script src="centro-control-share.js"></script></body></html>
