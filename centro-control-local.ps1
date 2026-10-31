@@ -3,7 +3,7 @@ $script:Root = $PSScriptRoot
 $script:DataDir = Join-Path $Root 'datos-centro-control'
 $script:UploadDir = Join-Path $script:DataDir 'archivos'
 $script:StatePath = Join-Path $script:DataDir 'registro.json'
-$script:HtmlPath = Join-Path $Root 'centro-de-control-boceto-integrado.html'
+$script:HtmlPath = Join-Path $Root 'centro-de-control-antes-fechas.html'
 $script:Sessions = @{}
 New-Item -ItemType Directory -Force -Path $script:UploadDir | Out-Null
 if (Test-Path $script:StatePath) {
@@ -114,7 +114,7 @@ function Handle-Request($Context) {
     $path = $Context.Request.Url.AbsolutePath
     $method = $Context.Request.HttpMethod
     if ($method -eq 'GET' -and $path -in @('/', '/demo', '/antes-fechas')) {
-        $pagePath = if ($path -eq '/demo') { Join-Path $script:Root 'centro-de-control-demo.html' } elseif ($path -eq '/antes-fechas') { Join-Path $script:Root 'centro-de-control-antes-fechas.html' } else { $script:HtmlPath }
+        $pagePath = if ($path -eq '/demo') { Join-Path $script:Root 'centro-de-control-demo.html' } else { $script:HtmlPath }
         if (-not (Test-Path $pagePath)) { Send-Json $Context @{ error = 'No se encuentra el archivo HTML.' } 500; return }
         $bytes = [System.IO.File]::ReadAllBytes($pagePath)
         $Context.Response.Headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
@@ -1154,10 +1154,10 @@ if (-not [string]::IsNullOrWhiteSpace($env:CENTRO_CONTROL_BIND_ADDRESS)) {
 $listener = [System.Net.Sockets.TcpListener]::new($bindAddress, 8765)
 try {
     $listener.Start()
-    Write-Host 'Centro de control listo en esta computadora: http://localhost:8765/antes-fechas'
+    Write-Host 'Centro de control listo en esta computadora: http://localhost:8765/'
     Write-Host 'Solo es accesible desde esta computadora. Deja esta ventana abierta mientras lo usas.'
     if ($env:CENTRO_CONTROL_NO_OPEN -ne '1') {
-        try { Start-Process 'http://localhost:8765/antes-fechas' } catch { Write-Host 'Abre el centro de control manualmente en http://localhost:8765/antes-fechas' }
+        try { Start-Process 'http://localhost:8765/' } catch { Write-Host 'Abre el centro de control manualmente en http://localhost:8765/' }
     }
     while ($true) {
         $client = $listener.AcceptTcpClient()
