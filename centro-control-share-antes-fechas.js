@@ -484,6 +484,20 @@ async function renderEntryGate(message = '') {
   }
   const accessPanel = `<div class="entry-form-heading"><h2>Centro de control</h2><p>Inicia sesión para continuar.</p></div><div class="entry-auth-card"><div class="entry-auth-icon">↗</div><div class="entry-auth-kicker">ACCESO AL PROYECTO</div><h2>Iniciar sesión</h2><p class="entry-auth-copy">Ingresa con el correo autorizado por la administración.</p><div class="entry-gate-fields"><div class="entry-gate-field"><label for="loginEmail">Correo autorizado</label><input id="loginEmail" type="email" autocomplete="username"></div><div class="entry-gate-field"><label for="loginPassword">Contraseña</label><input id="loginPassword" type="password" autocomplete="current-password"></div></div><div class="entry-gate-actions"><button class="primary" data-action="login">Entrar</button></div><p id="entryMessage" class="entry-gate-message">${shareEscape(message)}</p></div><div class="entry-auth-card entry-activation-card"><div class="entry-auth-icon entry-activation-icon">＋</div><div class="entry-auth-kicker">NUEVO INTEGRANTE</div><h2>Activar cuenta</h2><p class="entry-auth-copy">Primero pide una invitación a la persona administradora.</p><div class="entry-gate-fields"><div class="entry-gate-field"><label for="activateName">Nombre completo</label><input id="activateName" autocomplete="name"></div><div class="entry-gate-field"><label for="activateEmail">Correo autorizado</label><input id="activateEmail" type="email" autocomplete="email"></div><div class="entry-gate-field"><label for="inviteCode">Código de invitación</label><input id="inviteCode" autocomplete="one-time-code"></div><div class="entry-gate-field"><label for="activatePassword">Crea una contraseña</label><input id="activatePassword" type="password" autocomplete="new-password"></div><div class="entry-gate-field"><label for="activateConfirm">Repite la contraseña</label><input id="activateConfirm" type="password" autocomplete="new-password"></div></div><div class="entry-gate-actions"><button data-action="activate">Activar cuenta</button></div></div>`;
   gate.innerHTML = entryLandingMarkup(accessPanel, message);
+  const loginMessage = document.getElementById('entryMessage');
+  if (loginMessage) {
+    loginMessage.setAttribute('role', 'status');
+    loginMessage.setAttribute('aria-live', 'polite');
+  }
+  const activateButton = gate.querySelector('[data-action="activate"]');
+  if (activateButton) {
+    const activationMessage = document.createElement('p');
+    activationMessage.id = 'activationMessage';
+    activationMessage.className = 'entry-gate-message';
+    activationMessage.setAttribute('role', 'status');
+    activationMessage.setAttribute('aria-live', 'polite');
+    activateButton.insertAdjacentElement('afterend', activationMessage);
+  }
   document.body.classList.remove('auth-initializing');
 }
 
@@ -947,7 +961,23 @@ async function shareApi(path, options = {}) {
   const token = sessionStorage.getItem(SHARE_TOKEN);
   if (token) headers.Authorization = `Bearer ${token}`;
   if (options.body) headers['Content-Type'] = 'application/json';
-  const response = await fetch(path, { ...options, headers });
+  const isEntryRequest = path === '/api/login' || path === '/api/activate';
+  const controller = isEntryRequest && !options.signal ? new AbortController() : null;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), 30000) : null;
+  let response;
+  try {
+    response = await fetch(path, { ...options, headers, ...(controller ? { signal: controller.signal } : {}) });
+  } catch (error) {
+    if (controller && error.name === 'AbortError') {
+      throw new Error('El servidor no respondió en 30 segundos. Comprueba tu conexión y vuelve a intentarlo.');
+    }
+    if (isEntryRequest && error instanceof TypeError) {
+      throw new Error('No se pudo conectar con el servidor. Comprueba tu internet e inténtalo otra vez.');
+    }
+    throw error;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
   if (!response.ok) {
     let message = 'No se pudo completar la acción.';
     try { message = (await response.json()).error || message; } catch {}
@@ -2166,6 +2196,21 @@ document.addEventListener('click', async event => {
   const button = event.target.closest('[data-action]');
   if (!button) return;
   const action = button.dataset.action;
+  const isEntryAction = action === 'login' || action === 'activate';
+  const originalButtonText = button.textContent;
+  if (isEntryAction) {
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = action === 'login' ? 'Ingresando…' : 'Activando cuenta…';
+    const status = document.getElementById(action === 'login' ? 'entryMessage' : 'activationMessage');
+    if (status) {
+      status.classList.remove('is-error');
+      status.classList.add('is-pending');
+      status.textContent = action === 'login'
+        ? 'Conectando con el servidor… espera un momento.'
+        : 'Enviando los datos y creando la cuenta… espera un momento.';
+    }
+  }
   try {
     if (action === 'clear-section') {
       if (currentUser?.role !== 'admin') throw new Error('Solo el administrador puede limpiar información.');
@@ -2326,10 +2371,10 @@ document.addEventListener('click', async event => {
       const result = await shareApi('/api/login', { method: 'POST', body: JSON.stringify({ email: document.getElementById('loginEmail').value, password: document.getElementById('loginPassword').value }) });
       sessionStorage.setItem(SHARE_TOKEN, result.token);
       setTopLogoutVisible(true);
-      closeEntryGate();
       await loadSharedProject();
       await renderShare();
       await renderControlInbox();
+      closeEntryGate();
     } else if (action === 'activate') {
       const email = document.getElementById('activateEmail').value;
       await shareApi('/api/activate', { method: 'POST', body: JSON.stringify({ name: document.getElementById('activateName').value, email: document.getElementById('activateEmail').value, code: document.getElementById('inviteCode').value, password: document.getElementById('activatePassword').value, confirm: document.getElementById('activateConfirm').value }) });
@@ -2475,7 +2520,28 @@ document.addEventListener('click', async event => {
       URL.revokeObjectURL(link.href);
     }
   } catch (error) {
-    shareMessage(error.message, true);
+    if (isEntryAction) {
+      if (action === 'login') {
+        sessionStorage.removeItem(SHARE_TOKEN);
+        setTopLogoutVisible(false);
+      }
+      const status = document.getElementById(action === 'login' ? 'entryMessage' : 'activationMessage');
+      if (status) {
+        status.classList.remove('is-pending');
+        status.classList.add('is-error');
+        status.textContent = error.message || 'No se pudo completar la solicitud. Vuelve a intentarlo.';
+      } else {
+        shareMessage(error.message, true);
+      }
+    } else {
+      shareMessage(error.message, true);
+    }
+  } finally {
+    if (isEntryAction && button.isConnected) {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.textContent = originalButtonText;
+    }
   }
 });
 
