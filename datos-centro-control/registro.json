@@ -1,0 +1,542 @@
+{
+    "allowedEmails":  [
+                          "brandonlasteros31@gmail.com"
+                      ],
+    "invitations":  [
+
+                    ],
+    "users":  [
+                  {
+                      "email":  "brandonlasteros31@gmail.com",
+                      "salt":  "RrrBGfzXIAcIZNCq7LkQKQ==",
+                      "hash":  "N+AAdeQaqt0nKeT+XjXlVGMNOEeiR/Nj44vyypMH+f8=",
+                      "role":  "admin",
+                      "created":  "2026-10-29T11:59:03.6252177-05:00",
+                      "draft":  {
+
+                                }
+                  }
+              ],
+    "submissions":  [
+
+                    ],
+    "project":  {
+                    "name":  "PROYECTO: \"CREACION DE COMPLEJO DEPORTIVO EN EL ANEXO BELLAVISTA, DISTRITO DE POLOBAYA, PROVINCIA DE AREQUIPA, DEPARTAMENTO DE AREQUIPA\"",
+                    "entity":  "MUNICIPALIDAD DISTRITAL DE POLOBAYA",
+                    "executionType":  "Obra por contrata",
+                    "code":  "",
+                    "cutoff":  "2026-10-29",
+                    "description":  "",
+                    "techReportRole":  "resident",
+                    "techExecutiveUnit":  "",
+                    "techPliego":  "",
+                    "techWorkStatus":  "",
+                    "techWorkTermDays":  "150",
+                    "techExecutionSystem":  "",
+                    "techWorkEnd":  "2026-11-21",
+                    "techResidentName":  "brandon david lasteros quispe",
+                    "techResidentDni":  "70000574",
+                    "techResidentCip":  "337786",
+                    "techResidentDesignation":  "",
+                    "techResidentAmount":  "",
+                    "techResidentResolutionDate":  "",
+                    "techResidentServiceStart":  "2026-06-01",
+                    "techResidentServiceEnd":  "2026-12-06",
+                    "techSupervisorName":  "",
+                    "techSupervisorDni":  "",
+                    "techSupervisorCip":  "",
+                    "techSupervisorDesignation":  "",
+                    "techSupervisorAmount":  "",
+                    "techSupervisorResolutionDate":  "",
+                    "techSupervisorServiceStart":  "",
+                    "techSupervisorServiceEnd":  "",
+                    "techOffice":  "Unidad desarrollo urbano rural",
+                    "techFunctionalSequence":  "",
+                    "techFiscalYear":  "2026",
+                    "techFundingSource":  "recursos directamente recaudados",
+                    "techApprovedBudget":  "1137277.08",
+                    "techAnalyticalBudget":  "1137277.08",
+                    "techExecutedBudget":  "0",
+                    "techCompletedGoals":  "",
+                    "techExpedientApproval":  "",
+                    "techLandDelivery":  "",
+                    "techWorkStart":  "2026-06-24",
+                    "techViability":  "",
+                    "techInfobras":  "",
+                    "techContractNumber":  "",
+                    "techContractObject":  "",
+                    "techContractor":  "",
+                    "techContractAmount":  "",
+                    "techDeliverySystem":  "",
+                    "techContractTerm":  "",
+                    "techContractStart":  "",
+                    "techContractEnd":  "",
+                    "techDirectApprovalReports":  "",
+                    "techDirectKeyStaff":  "",
+                    "techDirectExpedientReview":  "",
+                    "techDirectSupplyPlan":  "",
+                    "techDirectPeriodProgress":  "",
+                    "techDirectQualitySafety":  "",
+                    "techDirectChanges":  "",
+                    "techDirectCloseout":  "",
+                    "techContractSupervisor":  "",
+                    "techContractSchedule":  "",
+                    "techContractValuations":  "",
+                    "techContractChanges":  "",
+                    "techContractCloseout":  "",
+                    "departmentCode":  "04",
+                    "department":  "AREQUIPA",
+                    "provinceCode":  "0401",
+                    "province":  "AREQUIPA",
+                    "districtCode":  "040114",
+                    "district":  "POLOBAYA",
+                    "location":  "POLOBAYA, AREQUIPA, AREQUIPA"
+                },
+    "workspace":  {
+                      "workers":  [
+
+                                  ],
+                      "activities":  [
+
+                                     ],
+                      "comments":  [
+
+                                   ],
+                      "sources":  {
+                                      "reports":  "",
+                                      "activities":  "",
+                                      "comments":  "",
+                                      "other":  "",
+                                      "byWeek":  {
+
+                                                 }
+                                  }
+                  },
+    "revision":  53,
+    "auditLog":  [
+                     {
+                         "id":  "dc857a801bb14e8b9c00466fe70412e0",
+                         "at":  "2026-10-29T16:33:36.5142047-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "workers agregado",
+                         "detail":  "Gledy Eliana Medina Pacompia",
+                         "revision":  1
+                     },
+                     {
+                         "id":  "3cd99a8a20e84b6ea0a84ad14b70847c",
+                         "at":  "2026-10-29T18:04:07.6124167-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  2
+                     },
+                     {
+                         "id":  "9aaa553688a348e0b0f20bd06aa05df6",
+                         "at":  "2026-10-29T18:04:09.7033320-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  3
+                     },
+                     {
+                         "id":  "e0b199ef6d3d4235bc564d0e94f27270",
+                         "at":  "2026-10-29T18:04:12.2742698-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  4
+                     },
+                     {
+                         "id":  "e39ac2b832c74063a349cdb553d32340",
+                         "at":  "2026-10-29T18:04:14.5698904-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Informe cargado",
+                         "detail":  "Informe de avance de obra 123",
+                         "revision":  5
+                     },
+                     {
+                         "id":  "8af4c9a834094256abcaa62871764644",
+                         "at":  "2026-10-29T18:05:35.5832764-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "Entrega revisada",
+                         "detail":  "Informe de avance de obra 123: Pendiente -\u003e Aprobada.",
+                         "revision":  6
+                     },
+                     {
+                         "id":  "a30ab86488be4e25955a578c2a53e514",
+                         "at":  "2026-10-29T18:17:12.2675906-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  7
+                     },
+                     {
+                         "id":  "8b5ada38d67d46fba11d886bdc74dc77",
+                         "at":  "2026-10-29T18:17:13.4715166-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  8
+                     },
+                     {
+                         "id":  "1072ae4ff4354e11b5c52827b03c51a4",
+                         "at":  "2026-10-29T18:17:15.8447745-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  9
+                     },
+                     {
+                         "id":  "cd248c6fcc8d45dcbfbc893ca8a99c2d",
+                         "at":  "2026-10-29T18:17:22.2631691-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  10
+                     },
+                     {
+                         "id":  "b8c37d8f4c7b42e6b9a776f7eec5de01",
+                         "at":  "2026-10-29T18:17:31.0014316-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  11
+                     },
+                     {
+                         "id":  "c09558f223054370b3285a1d0bf0632e",
+                         "at":  "2026-10-29T18:17:34.1934474-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  12
+                     },
+                     {
+                         "id":  "42e1cedce38548e9940a1d43f934789d",
+                         "at":  "2026-10-29T18:17:43.0727040-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  13
+                     },
+                     {
+                         "id":  "1a453297f0ae4efcba8f65999a4230eb",
+                         "at":  "2026-10-29T18:17:44.3079905-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  14
+                     },
+                     {
+                         "id":  "4c53462431c04b5a8e9214cb466cec51",
+                         "at":  "2026-10-29T18:17:45.9596797-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  15
+                     },
+                     {
+                         "id":  "6ad8afd28ad048cfb1ba99325cd1f57a",
+                         "at":  "2026-10-29T18:17:47.3862682-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  16
+                     },
+                     {
+                         "id":  "80ea83e643974fce9e99d9fd87bbbb8a",
+                         "at":  "2026-10-29T18:17:51.0744969-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Borrador de trabajador actualizado",
+                         "detail":  "gledymedina02@gmail.com Â· datos de formularios",
+                         "revision":  17
+                     },
+                     {
+                         "id":  "4272a1948f4c4480ab4987f819869300",
+                         "at":  "2026-10-29T18:17:53.4421354-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Valorizacion cargada",
+                         "detail":  "vallrizacion n°4",
+                         "revision":  18
+                     },
+                     {
+                         "id":  "996624b99deb4f5a9418ad5c243580fd",
+                         "at":  "2026-10-29T18:18:09.7089412-05:00",
+                         "actor":  "gledymedina (gledymedina02@gmail.com)",
+                         "action":  "Valorizacion cargada",
+                         "detail":  "vallrizacion n°4",
+                         "revision":  19
+                     },
+                     {
+                         "id":  "2beca3b37323416d8cdf0bcae2ded39d",
+                         "at":  "2026-10-29T18:18:57.3865769-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "Entrega revisada",
+                         "detail":  "vallrizacion n°4: Pendiente -\u003e Aprobada.",
+                         "revision":  20
+                     },
+                     {
+                         "id":  "c2f31c40c2174712af3739259aba5269",
+                         "at":  "2026-10-29T18:19:18.0545001-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "Entrega revisada",
+                         "detail":  "vallrizacion n°4: Pendiente -\u003e Observada. asd",
+                         "revision":  21
+                     },
+                     {
+                         "id":  "6a066a05139146b2927b447e2e5f3911",
+                         "at":  "2026-10-29T20:31:06.2877979-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "workers actualizado",
+                         "detail":  "Gledy Eliana Medina Pacompia",
+                         "revision":  22
+                     },
+                     {
+                         "id":  "c88189ae14a540ca8c50a52909bd4869",
+                         "at":  "2026-10-29T21:00:00.5689388-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techReportRole:  -\u003e resident",
+                         "revision":  23
+                     },
+                     {
+                         "id":  "5bc70946b6c6406b81cb606d407b0532",
+                         "at":  "2026-10-29T21:01:11.4261574-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "Permiso de cuenta actualizado",
+                         "detail":  "gledymedina02@gmail.com: staff -\u003e admin",
+                         "revision":  24
+                     },
+                     {
+                         "id":  "6f3f5058ecc348a19c0616376bed58d6",
+                         "at":  "2026-10-29T21:01:13.4164049-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "Permiso de cuenta actualizado",
+                         "detail":  "gledymedina02@gmail.com: admin -\u003e staff",
+                         "revision":  25
+                     },
+                     {
+                         "id":  "29a98bbe43294226ad1f881139947d15",
+                         "at":  "2026-10-29T21:01:15.7413008-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "Permiso de cuenta actualizado",
+                         "detail":  "gledymedina02@gmail.com: staff -\u003e admin",
+                         "revision":  26
+                     },
+                     {
+                         "id":  "9b2792482f3e4bf4944c386d16a0e1a5",
+                         "at":  "2026-10-29T22:00:28.6724814-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techWorkTermDays:  -\u003e 150",
+                         "revision":  27
+                     },
+                     {
+                         "id":  "f41b76d5a0ce46eb999074d854913c2b",
+                         "at":  "2026-10-29T22:00:40.1311135-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techWorkStart:  -\u003e 2026-06-24",
+                         "revision":  28
+                     },
+                     {
+                         "id":  "417f264c9ef04226a8e44f11e9e03d25",
+                         "at":  "2026-10-29T22:00:45.0099484-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techWorkEnd:  -\u003e 2026-11-21",
+                         "revision":  29
+                     },
+                     {
+                         "id":  "f97dfc38280040148a0de497ec2c44c1",
+                         "at":  "2026-10-29T22:00:50.3605425-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "",
+                         "revision":  30
+                     },
+                     {
+                         "id":  "81f6daf37ca2492898c68a1810f4eb72",
+                         "at":  "2026-10-29T22:00:56.4557073-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "Permiso de cuenta actualizado",
+                         "detail":  "gledymedina02@gmail.com: admin -\u003e staff",
+                         "revision":  31
+                     },
+                     {
+                         "id":  "3691be628d6445a58805f53514887dc0",
+                         "at":  "2026-10-29T22:01:20.9880323-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techOffice:  -\u003e Unidad desarrollo urbano rural",
+                         "revision":  32
+                     },
+                     {
+                         "id":  "a03a68f8af68458a90ea4c60c5b0cfa0",
+                         "at":  "2026-10-29T22:01:24.8945704-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techFiscalYear:  -\u003e 2026",
+                         "revision":  33
+                     },
+                     {
+                         "id":  "2ff637e9d0cb43d4a8376a789012de9c",
+                         "at":  "2026-10-29T22:01:38.1847379-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techFundingSource:  -\u003e recursos directamente recaudados",
+                         "revision":  34
+                     },
+                     {
+                         "id":  "6726642d260f45888f67719f0e53484b",
+                         "at":  "2026-10-29T22:01:46.4245519-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techApprovedBudget:  -\u003e 137277.08",
+                         "revision":  35
+                     },
+                     {
+                         "id":  "6ed35d2780174586b7bbbfc02177599e",
+                         "at":  "2026-10-29T22:01:51.1023160-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techAnalyticalBudget:  -\u003e 1237",
+                         "revision":  36
+                     },
+                     {
+                         "id":  "dfc145a2521f4f459509ef03b6117c89",
+                         "at":  "2026-10-29T22:02:00.0978977-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techApprovedBudget: 137277.08 -\u003e 1137277.08",
+                         "revision":  37
+                     },
+                     {
+                         "id":  "a1fa0cfc2ab54dae9cef82d81f8877fa",
+                         "at":  "2026-10-29T22:02:06.1201423-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techAnalyticalBudget: 1237 -\u003e 1137277.08",
+                         "revision":  38
+                     },
+                     {
+                         "id":  "25e244e2d9c740a99421c36783371105",
+                         "at":  "2026-10-29T22:02:14.2489558-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techExecutedBudget:  -\u003e 0",
+                         "revision":  39
+                     },
+                     {
+                         "id":  "1d75418861544cc6a2b90e2bd9264eb8",
+                         "at":  "2026-10-29T22:02:30.3851452-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techResidentName:  -\u003e brandon david lasteros quispe",
+                         "revision":  40
+                     },
+                     {
+                         "id":  "ce0feec63e09423990f36c2230ccd664",
+                         "at":  "2026-10-29T22:02:35.9257639-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "",
+                         "revision":  41
+                     },
+                     {
+                         "id":  "0056e1ca1ff0471080612c0242fb52da",
+                         "at":  "2026-10-29T22:02:41.9661118-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techResidentCip:  -\u003e 337786",
+                         "revision":  42
+                     },
+                     {
+                         "id":  "ddbcdf00404d4ba18948685768c475e2",
+                         "at":  "2026-10-29T22:02:46.0147922-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techResidentServiceStart:  -\u003e 2026-06-01",
+                         "revision":  43
+                     },
+                     {
+                         "id":  "9424663bbbaa40e892903c342429ccb7",
+                         "at":  "2026-10-29T22:02:50.3831847-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "techResidentServiceEnd:  -\u003e 2026-12-06",
+                         "revision":  44
+                     },
+                     {
+                         "id":  "4e4cd9571384495f97bc0a439708c1d4",
+                         "at":  "2026-10-29T22:02:53.6846047-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "",
+                         "revision":  45
+                     },
+                     {
+                         "id":  "5317c817c9924ecfb5327af72564dfbf",
+                         "at":  "2026-10-29T22:02:55.3376937-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "",
+                         "revision":  46
+                     },
+                     {
+                         "id":  "158432a029b74fa4b645265a2a3ef25a",
+                         "at":  "2026-10-29T22:09:14.4452839-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "executionType:  -\u003e Obra por contrata",
+                         "revision":  47
+                     },
+                     {
+                         "id":  "c772df78a29c476e85ea2b07d6334acc",
+                         "at":  "2026-10-29T22:09:26.7708808-05:00",
+                         "actor":  "sistema",
+                         "action":  "Proyecto actualizado",
+                         "detail":  "",
+                         "revision":  48
+                     },
+                     {
+                         "id":  "b275abebf5394544927d47b5286cf2ea",
+                         "at":  "2026-10-30T20:34:08.4265417-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "workers eliminado",
+                         "detail":  "Gledy Eliana Medina Pacompia",
+                         "revision":  49
+                     },
+                     {
+                         "id":  "b978804958a740f78be55af78c6341a2",
+                         "at":  "2026-10-30T20:35:13.6419137-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "Permiso de cuenta actualizado",
+                         "detail":  "gledymedina02@gmail.com: staff -\u003e admin",
+                         "revision":  50
+                     },
+                     {
+                         "id":  "01aa0397cc9e40269cdb4fd6c6f62aee",
+                         "at":  "2026-10-30T20:35:15.4100630-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "Permiso de cuenta actualizado",
+                         "detail":  "gledymedina02@gmail.com: admin -\u003e staff",
+                         "revision":  51
+                     },
+                     {
+                         "id":  "d4514cf4e78b4e77a19c03aa3ffd48e8",
+                         "at":  "2026-10-30T20:57:51.8543047-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "Trabajador retirado del proyecto",
+                         "detail":  "gledymedina (gledymedina02@gmail.com); se conservaron sus entregas y archivos.",
+                         "revision":  52
+                     },
+                     {
+                         "id":  "12ad66387b444d98af133343eda8782d",
+                         "at":  "2026-10-31T00:20:24.3951193-05:00",
+                         "actor":  "brandonlasteros31@gmail.com",
+                         "action":  "Entregas de valorizaciones eliminadas",
+                         "detail":  "2 entregas; 2 archivos sin referencias eliminados.",
+                         "revision":  53
+                     }
+                 ]
+}
