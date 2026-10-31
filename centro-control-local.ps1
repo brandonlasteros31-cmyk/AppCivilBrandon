@@ -1148,6 +1148,9 @@ function Write-TcpResponse($Client, $Context) {
     $stream.Flush()
 }
 $bindAddress = [System.Net.IPAddress]::Loopback
+if (-not [string]::IsNullOrWhiteSpace($env:CENTRO_CONTROL_BIND_ADDRESS)) {
+    $bindAddress = [System.Net.IPAddress]::Parse($env:CENTRO_CONTROL_BIND_ADDRESS)
+}
 $listener = [System.Net.Sockets.TcpListener]::new($bindAddress, 8765)
 try {
     $listener.Start()
