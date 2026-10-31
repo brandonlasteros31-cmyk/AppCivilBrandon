@@ -93,6 +93,22 @@ function Require-Admin($Context) {
 function Find-Submission([string]$Id) {
     return @($script:State.submissions | Where-Object { $_.id -eq $Id } | Select-Object -First 1)[0]
 }
+function Remove-SubmissionFilesIfUnused($RemovedSubmissions) {
+    $deleted = 0
+    foreach ($submission in @($RemovedSubmissions)) {
+        foreach ($file in @($submission.files)) {
+            $fileId = [string]$file.id
+            if ($fileId -notmatch '^[0-9a-f]{32}$') { continue }
+            $stillUsed = $false
+            foreach ($remaining in @($script:State.submissions)) {
+                if (@($remaining.files | Where-Object { [string]$_.id -eq $fileId }).Count -gt 0) { $stillUsed = $true; break }
+            }
+            $storedFile = Join-Path $script:UploadDir ($fileId + '.bin')
+            if (-not $stillUsed -and (Test-Path -LiteralPath $storedFile)) { Remove-Item -LiteralPath $storedFile -Force; $deleted++ }
+        }
+    }
+    return $deleted
+}
 function Handle-Request($Context) {
     $script:CurrentActor = 'sistema'
     $path = $Context.Request.Url.AbsolutePath
@@ -379,11 +395,38 @@ function Handle-Request($Context) {
                 $script:State.project = [pscustomobject]@{}
                 Save-State 'Datos del proyecto limpiados' 'Se conservó el equipo, el historial y los documentos enviados.'
             }
+            'project-general' {
+                foreach ($field in @('name','entity','executionType','code','cutoff','description','location','departmentCode','department','provinceCode','province','districtCode','district')) {
+                    $property = $script:State.project.PSObject.Properties[$field]
+                    if ($property) { $property.Value = '' }
+                }
+                Save-State 'Datos generales del proyecto limpiados' 'Se conservaron los datos tecnicos, trabajadores y entregas.'
+            }
+            'project-technical' {
+                foreach ($property in @($script:State.project.PSObject.Properties | Where-Object { $_.Name -like 'tech*' })) {
+                    $script:State.project | Add-Member -NotePropertyName $property.Name -NotePropertyValue '' -Force
+                }
+                Save-State 'Datos tecnicos del proyecto limpiados' 'Se conservaron los datos generales, trabajadores y entregas.'
+            }
+            'project-workers' {
+                $count = @($script:State.workspace.workers).Count
+                $script:State.workspace.workers = @()
+                Save-State 'Equipo del proyecto limpiado' ($count.ToString() + ' responsables retirados; se conservaron cuentas y entregas.')
+            }
             'control' {
                 foreach ($account in @($script:State.users)) {
                     $account.draft = [pscustomobject]@{ report = [pscustomobject]@{}; valuation = [pscustomobject]@{}; conformity = [pscustomobject]@{} }
                 }
                 Save-State 'Borradores de Control limpiados' 'Se borraron los borradores sin enviar de las cuentas.'
+            }
+            { $_ -in @('control-report','control-valuation','control-conformity') } {
+                $draftKey = switch ($section) { 'control-report' { 'report' } 'control-valuation' { 'valuation' } default { 'conformity' } }
+                foreach ($account in @($script:State.users)) {
+                    if (-not $account.draft) { $account | Add-Member -NotePropertyName draft -NotePropertyValue ([pscustomobject]@{}) }
+                    $account.draft | Add-Member -NotePropertyName $draftKey -NotePropertyValue ([pscustomobject]@{}) -Force
+                }
+                $draftLabel = switch ($draftKey) { 'report' { 'informe' } 'valuation' { 'valorizacion' } default { 'orden de bienes y servicios' } }
+                Save-State ('Borrador de ' + $draftLabel + ' limpiado') 'Se conservaron los demas borradores y entregas enviadas.'
             }
             'informe' {
                 $activityCount = @($script:State.workspace.activities).Count
@@ -392,6 +435,43 @@ function Handle-Request($Context) {
                 $script:State.workspace.comments = @()
                 $script:State.workspace.sources = [pscustomobject]@{ byWeek = @{} }
                 Save-State 'Datos semanales del informe limpiados' ($activityCount.ToString() + ' actividades y ' + $commentCount.ToString() + ' comentarios; se conservaron proyecto y entregas.')
+            }
+            'informe-activities' {
+                $count = @($script:State.workspace.activities).Count
+                $script:State.workspace.activities = @()
+                Save-State 'Actividades del informe limpiadas' ($count.ToString() + ' actividades eliminadas.')
+            }
+            'informe-comments' {
+                $count = @($script:State.workspace.comments).Count
+                $script:State.workspace.comments = @()
+                Save-State 'Comentarios del informe limpiados' ($count.ToString() + ' comentarios eliminados.')
+            }
+            'informe-sources' {
+                $script:State.workspace.sources = [pscustomobject]@{ byWeek = @{} }
+                Save-State 'Fuentes semanales del informe limpiadas' 'Se conservaron proyecto, actividades, comentarios y entregas.'
+            }
+            'informe-history' {
+                $count = @($script:State.auditLog).Count
+                $script:State.auditLog = @()
+                Save-State 'Historial de cambios reiniciado' ($count.ToString() + ' registros anteriores eliminados; se dejo constancia de esta limpieza.')
+            }
+            { $_ -in @('entregas-informes','entregas-valorizaciones','entregas-conformidades') } {
+                $kind = switch ($section) { 'entregas-valorizaciones' { 'valuation' } 'entregas-conformidades' { 'conformity' } default { 'report' } }
+                $removed = if ($kind -eq 'report') { @($script:State.submissions | Where-Object { $_.kind -ne 'valuation' -and $_.kind -ne 'conformity' }) } else { @($script:State.submissions | Where-Object { $_.kind -eq $kind }) }
+                $removedIds = @($removed | ForEach-Object { [string]$_.id })
+                $script:State.submissions = @($script:State.submissions | Where-Object { [string]$_.id -notin $removedIds })
+                $fileCount = Remove-SubmissionFilesIfUnused $removed
+                $kindLabel = switch ($kind) { 'valuation' { 'valorizaciones' } 'conformity' { 'ordenes de bienes y servicios' } default { 'informes' } }
+                Save-State ('Entregas de ' + $kindLabel + ' eliminadas') ($removed.Count.ToString() + ' entregas; ' + $fileCount.ToString() + ' archivos sin referencias eliminados.')
+            }
+            'submission' {
+                $submissionId = [string]$data.id
+                if ($submissionId -notmatch '^[0-9a-f]{32}$') { Send-Json $Context @{ error = 'No se reconoce la entrega que quieres eliminar.' } 400; return }
+                $removed = Find-Submission $submissionId
+                if (-not $removed) { Send-Json $Context @{ error = 'La entrega ya no existe o fue eliminada.' } 404; return }
+                $script:State.submissions = @($script:State.submissions | Where-Object { [string]$_.id -ne $submissionId })
+                $fileCount = Remove-SubmissionFilesIfUnused @($removed)
+                Save-State 'Entrega eliminada' ($removed.title + '; ' + $fileCount.ToString() + ' archivos sin referencias eliminados.')
             }
             'entregas' {
                 $submissionCount = @($script:State.submissions).Count
@@ -602,6 +682,34 @@ function Handle-Request($Context) {
         $account.role = $newRole
         Save-State 'Permiso de cuenta actualizado' ($email + ': ' + $previousRole + ' -> ' + $newRole)
         Send-Json $Context @{ ok = $true; email = $email; role = $newRole }
+        return
+    }
+    if ($method -eq 'POST' -and $path -eq '/api/people/remove') {
+        $admin = Require-Admin $Context
+        if (-not $admin) { return }
+        $data = Read-Json $Context
+        $email = ([string]$data.email).Trim().ToLowerInvariant()
+        if ($email -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$') { Send-Json $Context @{ error = 'No reconozco el correo del trabajador.' } 400; return }
+        if ($email -eq [string]$admin.email) { Send-Json $Context @{ error = 'No puedes retirarte a ti mismo del proyecto.' } 400; return }
+        $account = @($script:State.users | Where-Object { ([string]$_.email).ToLowerInvariant() -eq $email } | Select-Object -First 1)[0]
+        if ($account -and [string]$account.role -eq 'admin') { Send-Json $Context @{ error = 'No puedes retirar una cuenta administradora desde el equipo de trabajadores.' } 400; return }
+        $isAuthorized = @($script:State.allowedEmails | Where-Object { ([string]$_).Trim().ToLowerInvariant() -eq $email }).Count -gt 0
+        if (-not $account -and -not $isAuthorized) { Send-Json $Context @{ error = 'Ese trabajador ya no está en el proyecto.' } 404; return }
+        $personName = if ($account.displayName) { [string]$account.displayName } else { $email }
+        $script:State.users = @($script:State.users | Where-Object { ([string]$_.email).ToLowerInvariant() -ne $email })
+        $script:State.allowedEmails = @($script:State.allowedEmails | Where-Object { ([string]$_).Trim().ToLowerInvariant() -ne $email })
+        $script:State.invitations = @($script:State.invitations | Where-Object { ([string]$_.email).ToLowerInvariant() -ne $email })
+        foreach ($token in @($script:Sessions.Keys)) { if ([string]$script:Sessions[$token] -eq $email) { $script:Sessions.Remove($token) } }
+        $previousWorkerCount = @($script:State.workspace.workers).Count
+        $matchedWorkerIds = @($script:State.workspace.workers | Where-Object { ([string]$_.contact).Trim().ToLowerInvariant() -eq $email } | ForEach-Object { [string]$_.id })
+        if ($matchedWorkerIds.Count -eq 0 -and $personName -ne $email) {
+            $matchedWorkerIds = @($script:State.workspace.workers | Where-Object { ([string]$_.name).Trim().ToLowerInvariant() -eq $personName.Trim().ToLowerInvariant() } | Select-Object -First 1 | ForEach-Object { [string]$_.id })
+        }
+        $remainingWorkers = if ($matchedWorkerIds.Count -gt 0) { @($script:State.workspace.workers | Where-Object { [string]$_.id -notin $matchedWorkerIds }) } else { @($script:State.workspace.workers) }
+        $script:State.workspace.workers = $remainingWorkers
+        $removedWorkerCount = $previousWorkerCount - @($remainingWorkers).Count
+        Save-State 'Trabajador retirado del proyecto' ($personName + ' (' + $email + '); se conservaron sus entregas y archivos.')
+        Send-Json $Context @{ ok = $true; email = $email; removedWorkers = $removedWorkerCount }
         return
     }
     if ($method -eq 'GET' -and $path -eq '/api/submissions') {
@@ -922,6 +1030,21 @@ function Handle-Request($Context) {
         Send-Json $Context @{ ok = $true }
         return
     }
+    if ($method -eq 'POST' -and [System.Text.RegularExpressions.Regex]::IsMatch($path, '^/api/submissions/([0-9a-f]{32})/files/([0-9a-f]{32})/delete$')) {
+        if (-not (Require-Admin $Context)) { return }
+        $match = [System.Text.RegularExpressions.Regex]::Match($path, '^/api/submissions/([0-9a-f]{32})/files/([0-9a-f]{32})/delete$')
+        $submissionId = $match.Groups[1].Value
+        $fileId = $match.Groups[2].Value
+        $item = Find-Submission $submissionId
+        if (-not $item) { Send-Json $Context @{ error = 'No encuentro esa entrega.' } 404; return }
+        $file = @($item.files | Where-Object { [string]$_.id -eq $fileId } | Select-Object -First 1)[0]
+        if (-not $file) { Send-Json $Context @{ error = 'No encuentro ese archivo en la entrega.' } 404; return }
+        $item.files = @($item.files | Where-Object { [string]$_.id -ne $fileId })
+        Save-State 'Archivo adjunto eliminado' ($item.title + ' / ' + [string]$file.name)
+        [void](Remove-SubmissionFilesIfUnused @([pscustomobject]@{ files = @($file) }))
+        Send-Json $Context @{ ok = $true }
+        return
+    }
     if ($method -eq 'GET' -and [System.Text.RegularExpressions.Regex]::IsMatch($path, '^/api/files/([0-9a-f]{32})$')) {
         $fileId = [System.Text.RegularExpressions.Regex]::Match($path, '^/api/files/([0-9a-f]{32})$').Groups[1].Value
         if (-not $user) { Send-Json $Context @{ error = 'Inicia sesión.' } 401; return }
@@ -1004,17 +1127,9 @@ function Write-TcpResponse($Client, $Context) {
     $reasons = @{ 200 = 'OK'; 400 = 'Bad Request'; 401 = 'Unauthorized'; 403 = 'Forbidden'; 404 = 'Not Found'; 409 = 'Conflict'; 413 = 'Payload Too Large'; 500 = 'Internal Server Error' }
     $reason = $reasons[[int]$response.StatusCode]
     if (-not $reason) { $reason = 'OK' }
-    $headerText = "HTTP/1.1 $($response.StatusCode) $reason
-Content-Type: $($response.ContentType)
-Content-Length: $($body.Length)
-Connection: close
-Cache-Control: no-store
-X-Content-Type-Options: nosniff
-"
-    foreach ($key in $response.Headers.AllKeys) { $headerText += "$key`: $($response.Headers[$key])
-" }
-    $headerText += "
-"
+    $headerText = "HTTP/1.1 $($response.StatusCode) $reason`r`nContent-Type: $($response.ContentType)`r`nContent-Length: $($body.Length)`r`nConnection: close`r`nCache-Control: no-store`r`nX-Content-Type-Options: nosniff`r`n"
+    foreach ($key in $response.Headers.AllKeys) { $headerText += "$key`: $($response.Headers[$key])`r`n" }
+    $headerText += "`r`n"
     $headerBytes = [System.Text.Encoding]::ASCII.GetBytes($headerText)
     $stream = $Client.GetStream()
     $stream.Write($headerBytes, 0, $headerBytes.Length)

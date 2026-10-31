@@ -143,4 +143,24 @@ function renderAll(){let rs=reports.filter(r=>inWeek(r.date));$('mTotal').textCo
 $('refreshReport').onclick=renderReportDocument;$('printReport').onclick=()=>{renderReportDocument();window.print()};$('copyReport').onclick=()=>{renderReportDocument();let text=$('reportProjectTitle').textContent+'\n'+$('reportMeta').textContent+'\n\n1. INFORMACION GENERAL\n'+$('outProject').innerText+'\n\n2. RESPONSABLES\n'+$('outWorkers').innerText+'\n\n3. INFORMES\n'+$('outReports').innerText+'\n\n4. ESTADO\n'+$('outStatus').innerText+'\n\n5. VALORIZACIONES\n'+$('outValuations').innerText+'\n\n6. CONFORMIDADES\n'+$('outConformities').innerText+'\n\n7. ACTIVIDADES\n'+$('outActivities').innerText+'\n\n8. FUENTES Y COMENTARIOS\n'+$('outSources').innerText+'\n\n9. CONCLUSION\n'+$('outConclusion').innerText;navigator.clipboard?.writeText(text).then(()=>alert('Informe copiado.')).catch(()=>alert(text))};
 $('exportData').onclick=()=>{let d={project,workers,reports:reports.map(r=>({...r,file:r.file})),activities,comments,sources,workspace:liveWorkspace,submissions:sharedReportItems,audit:liveAuditLog};let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));a.download='centro-control-datos-boceto.json';a.click();URL.revokeObjectURL(a.href)};
 $('cutoff').value=today();$('reportDate').value=today();$('activityDue').value=today();renderWeek();renderWorkers();
-</script><script src="centro-control-share.js?v=20261029-33"></script></body></html>
+</script><script>
+const renderWorkersWithIndividualRemoval = renderWorkers;
+renderWorkers = function () {
+  renderWorkersWithIndividualRemoval();
+  if (currentUser?.role !== 'admin') return;
+  const list = document.getElementById('workerList');
+  if (!list) return;
+  for (const person of window.projectTeamAccounts || []) {
+    if (!person.email || person.role === 'admin' || person.email === currentUser.email) continue;
+    const email = String(person.email).toLowerCase();
+    const card = Array.from(list.querySelectorAll('.worker-card')).find(item => item.textContent.toLowerCase().includes(email));
+    if (!card || card.querySelector('[data-action="remove-person"]')) continue;
+    const actions = card.querySelector('.itemtop .actions, .rw');
+    if (!actions) continue;
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'warn'; button.textContent = 'Retirar del proyecto';
+    button.dataset.action = 'remove-person'; button.dataset.email = person.email; button.dataset.name = person.displayName || person.email;
+    actions.appendChild(button);
+  }
+};
+</script><script src="centro-control-share.js?v=20261030-35"></script></body></html>

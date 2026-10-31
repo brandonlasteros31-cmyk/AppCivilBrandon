@@ -33,6 +33,35 @@ function roleLabel(role) {
   return 'Invitación pendiente';
 }
 
+function addWorkerRemovalButtons() {
+  if (currentUser?.role !== 'admin') return;
+  const people = (window.projectTeamAccounts || []).filter(person => person.role !== 'admin' && person.email !== currentUser.email);
+  const cards = Array.from(document.querySelectorAll('#workerList .worker-card, #peopleList .item'));
+  for (const person of people) {
+    const email = String(person.email || '').toLowerCase();
+    if (!email) continue;
+    for (const card of cards.filter(item => item.textContent.toLowerCase().includes(email))) {
+      if (Array.from(card.querySelectorAll('[data-action="remove-person"]')).some(button => button.dataset.email?.toLowerCase() === email)) continue;
+      let actions = card.querySelector('.itemtop .actions, .rw');
+      if (!actions) {
+        const top = card.querySelector('.itemtop');
+        if (!top) continue;
+        actions = document.createElement('div');
+        actions.className = 'actions';
+        top.appendChild(actions);
+      }
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'warn';
+      button.dataset.action = 'remove-person';
+      button.dataset.email = person.email;
+      button.dataset.name = person.displayName || person.email;
+      button.textContent = 'Retirar del proyecto';
+      actions.appendChild(button);
+    }
+  }
+}
+
 function shareMessage(text, isError = false) {
   const gate = document.getElementById('entryGate');
   const box = gate && gate.style.display !== 'none'
@@ -814,6 +843,7 @@ function renderLiveSnapshot(snapshot) {
   liveAuditLog = snapshot.auditLog || [];
   reports = sharedReportItems.filter(item => item.kind !== 'valuation' && item.kind !== 'conformity').map(item => ({ id: item.id, title: item.title, number: item.number, date: item.documentDate, responsible: item.responsibleName || item.responsibleEmail, file: (item.files || []).map(file => file.name).join(', '), note: item.note, status: item.status === 'Aprobada' ? 'Aprobado' : item.status === 'Observada' ? 'Con observaciones' : 'Pendiente de revision', reviewNote: item.review, reviewDate: item.reviewed }));
   renderWorkers();
+  addWorkerRemovalButtons();
   renderAll();
   renderSharedReportSummary();
   renderControlConformities(sharedReportItems);
@@ -1520,6 +1550,7 @@ async function renderAdmin(me) {
   populateResponsible(people, '');
   document.getElementById('submissionList').insertAdjacentHTML('beforebegin', `<div class="card"><h3>Guardar información antes de iniciar otro proyecto</h3><p class="mu">Descarga en un solo archivo el proyecto, las entregas y los documentos cargados. Esta opción está disponible solo para el administrador.</p><button class="pr" type="button" data-action="download-project-backup">Guardar y descargar copia completa</button></div>`);
   document.getElementById('peopleList').innerHTML = people.map(person => `<div class="item"><b>${shareEscape(person.displayName || person.email)}</b><div class="mini">${shareEscape(person.email)}</div><div class="rw"><span class="mu">${roleLabel(person.role)}</span>${!person.active ? `<button data-action="invite-existing" data-email="${shareEscape(person.email)}">Crear código</button>` : ''}</div></div>`).join('');
+  addWorkerRemovalButtons();
   document.getElementById('submissionList').innerHTML = adminSubmissionGroups(items);
 }
 
@@ -1650,6 +1681,7 @@ async function renderControlInbox(me = null) {
       $('mObserved').textContent = items.filter(item => item.status === 'Observada').length;
       $('mPending').textContent = items.filter(item => item.status === 'Pendiente').length;
     }
+    addWorkerRemovalButtons();
   } catch (error) {
     inbox.innerHTML = `<div class="card">${shareEscape(error.message)}</div>`;
   }
@@ -1971,6 +2003,19 @@ document.addEventListener('click', async event => {
       await shareApi('/api/people/role', { method: 'POST', body: JSON.stringify({ email: button.dataset.email, role: button.dataset.role }) });
       await renderShare();
       shareMessage(`Permiso actualizado: ahora esta persona es ${roleName}.`);
+    } else if (action === 'remove-person') {
+      if (currentUser?.role !== 'admin') throw new Error('Solo el administrador puede retirar trabajadores del proyecto.');
+      const personName = button.dataset.name || button.dataset.email;
+      if (!confirm(`¿Retirar a ${personName} del proyecto? Perderá el acceso, pero sus informes y archivos se conservarán.`)) return;
+      await shareApi('/api/people/remove', { method: 'POST', body: JSON.stringify({ email: button.dataset.email }) });
+      const removedEmail = String(button.dataset.email || '').toLowerCase();
+      window.projectTeamAccounts = (window.projectTeamAccounts || []).filter(person => String(person.email || '').toLowerCase() !== removedEmail);
+      button.closest('.worker-card, .item')?.remove();
+      const [snapshot, people] = await Promise.all([shareApi('/api/live'), shareApi('/api/people')]);
+      window.projectTeamAccounts = people;
+      renderLiveSnapshot(snapshot);
+      await renderShare();
+      toast('Trabajador retirado del proyecto. Sus entregas siguen guardadas.');
     } else if (action === 'refresh-tech-report') {
       const me = await shareApi('/api/me');
       const items = await shareApi(me.role === 'admin' ? '/api/submissions' : '/api/technical-summary');

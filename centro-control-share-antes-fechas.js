@@ -23,9 +23,82 @@ function shareEscape(value) {
   return esc(String(value ?? ''));
 }
 
+function addAdminFileRemovalButtons() {
+  if (currentUser?.role !== 'admin') return;
+  document.querySelectorAll('.submission-file-row').forEach(row => {
+    if (row.querySelector('[data-action="delete-file"]')) return;
+    const download = row.querySelector('button[data-action="download"]');
+    const details = row.closest('.submission-details');
+    const item = sharedReportItems.find(submission => details?.id.includes(submission.id));
+    if (!download || !item) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'warn';
+    button.dataset.action = 'delete-file';
+    button.dataset.submissionId = item.id;
+    button.dataset.id = download.dataset.id;
+    button.dataset.name = download.dataset.name;
+    button.textContent = 'Eliminar';
+    row.appendChild(button);
+  });
+}
+
+function renderPendingFileList(input) {
+  const root = document.getElementById(`selected-files-${input.id}`);
+  if (!root) return;
+  const files = Array.from(input.files || []);
+  root.innerHTML = files.map((file, index) => `<div class="valuation-file-row"><span>${shareEscape(file.name)} · ${(file.size / 1024 / 1024).toFixed(2)} MB</span><button type="button" data-action="remove-pending-file" data-input="${shareEscape(input.id)}" data-index="${index}">Quitar archivo</button></div>`).join('');
+}
+
+function bindPendingFileRemoval() {
+  const inputs = Array.from(document.querySelectorAll('input[type="file"]'))
+    .filter(input => !['valuationFile','profileAvatar'].includes(input.id));
+  for (const input of inputs) {
+    let root = document.getElementById(`selected-files-${input.id}`);
+    if (!root) {
+      root = document.createElement('div');
+      root.id = `selected-files-${input.id}`;
+      root.className = 'mini';
+      input.insertAdjacentElement('afterend', root);
+    }
+    if (!input.dataset.pendingFileRemovalBound) {
+      input.addEventListener('change', () => renderPendingFileList(input));
+      input.dataset.pendingFileRemovalBound = 'true';
+    }
+    renderPendingFileList(input);
+  }
+}
+
 function updateSectionClearButtons() {
   const allowed = currentUser?.role === 'admin';
   document.querySelectorAll('.section-clear-button').forEach(button => button.classList.toggle('hidden', !allowed));
+}
+
+function addWorkerRemovalButtons() {
+  if (currentUser?.role !== 'admin') return;
+  const people = (window.projectTeamAccounts || []).filter(person => person.role !== 'admin' && person.email !== currentUser.email);
+  const cards = Array.from(document.querySelectorAll('#workerList .worker-card, #peopleList .item'));
+  for (const person of people) {
+    for (const card of cards.filter(item => item.textContent.toLowerCase().includes(String(person.email).toLowerCase()))) {
+      if (Array.from(card.querySelectorAll('[data-action="remove-person"]')).some(button => button.dataset.email === person.email)) continue;
+      let actions = card.querySelector('.itemtop .actions, .rw');
+      if (!actions) {
+        const top = card.querySelector('.itemtop');
+        if (!top) continue;
+        actions = document.createElement('div');
+        actions.className = 'actions';
+        top.appendChild(actions);
+      }
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'warn';
+      button.dataset.action = 'remove-person';
+      button.dataset.email = person.email;
+      button.dataset.name = person.displayName || person.email;
+      button.textContent = 'Retirar del proyecto';
+      actions.appendChild(button);
+    }
+  }
 }
 
 function shareNoteMarkup(value) {
@@ -383,6 +456,7 @@ function prepareControlInbox() {
     legacyReview.innerHTML = '<h2>Revisión privada</h2><p class="muted">Solo el administrador puede aprobar informes o autorizar correcciones.</p><div id="privateReviewList"></div>';
     legacyReview.classList.add('hidden');
   }
+  bindPendingFileRemoval();
 }
 
 async function generateWeeklyConclusion(force = false) {
@@ -528,7 +602,7 @@ function sharedSubmissionCards(items, adminMode) {
     const files = item.files || [];
     const detailsId = `submission-details-${item.id}`;
     const displayStatus = !adminMode && item.status === 'Pendiente' ? 'En revisión' : item.status;
-    return `<div class="item submission-disclosure"><div class="submission-card-header"><b class="submission-card-title">${shareEscape(item.title)}</b><span class="badge ${item.status === 'Aprobada' ? 'approved' : item.status === 'Observada' ? 'observed' : 'pending'}">${shareEscape(displayStatus)}</span><button type="button" class="submission-toggle" data-action="toggle-submission-details" data-id="${shareEscape(item.id)}" aria-expanded="false" aria-controls="${shareEscape(detailsId)}">Desplegar</button></div><div id="${shareEscape(detailsId)}" class="submission-details hidden"><div class="mini">Entregado por: ${shareEscape(item.submitterName || item.email)} · ${shareEscape(item.email)}</div><div class="mini">Responsable: ${shareEscape(item.responsibleName || item.responsibleEmail || item.email)}${item.number ? ' · N.º ' + shareEscape(item.number) : ''}${item.documentDate ? ' · ' + fmt(item.documentDate) : ''} · ${new Date(item.created).toLocaleString('es-PE')}</div>${item.note ? `<p>${shareNoteMarkup(item.note)}</p>` : ''}<div class="submission-files">${files.length ? files.map(file => `<div class="submission-file-row"><span>${shareEscape(file.name)}</span><button type="button" data-action="download" data-id="${shareEscape(file.id)}" data-name="${shareEscape(file.name)}">Descargar</button></div>`).join('') : '<div class="mini">Esta entrega no tiene archivos adjuntos.</div>'}</div>${adminMode && item.status === 'Pendiente' ? `<div class="field"><label>Observaciones (obligatorias si devuelves)</label><textarea id="review-${shareEscape(item.id)}" placeholder="Qué debe corregirse"></textarea></div><div class="actions"><button class="good" data-action="review" data-id="${shareEscape(item.id)}" data-status="Aprobada">Aprobar</button><button class="warn" data-action="review" data-id="${shareEscape(item.id)}" data-status="Observada">Devolver con observaciones</button></div>` : adminMode && item.review ? `<p><b>Observaciones privadas:</b> ${shareEscape(item.review)}</p>` : ''}${adminMode && item.editRequestStatus === 'pending' ? `<div class="notice"><b>Solicita corregir este envío.</b><p>${shareEscape(item.editRequestNote || 'Sin motivo indicado')}</p><div class="actions"><button class="good" data-action="edit-decision" data-id="${shareEscape(item.id)}" data-status="authorized">Autorizar corrección</button><button data-action="edit-decision" data-id="${shareEscape(item.id)}" data-status="denied">Rechazar solicitud</button></div></div>` : ''}${!adminMode ? staffEditControls(item) : ''}</div></div>`;
+    return `<div class="item submission-disclosure"><div class="submission-card-header"><b class="submission-card-title">${shareEscape(item.title)}</b><span class="badge ${item.status === 'Aprobada' ? 'approved' : item.status === 'Observada' ? 'observed' : 'pending'}">${shareEscape(displayStatus)}</span><button type="button" class="submission-toggle" data-action="toggle-submission-details" data-id="${shareEscape(item.id)}" aria-expanded="false" aria-controls="${shareEscape(detailsId)}">Desplegar</button></div><div id="${shareEscape(detailsId)}" class="submission-details hidden"><div class="mini">Entregado por: ${shareEscape(item.submitterName || item.email)} · ${shareEscape(item.email)}</div><div class="mini">Responsable: ${shareEscape(item.responsibleName || item.responsibleEmail || item.email)}${item.number ? ' · N.º ' + shareEscape(item.number) : ''}${item.documentDate ? ' · ' + fmt(item.documentDate) : ''} · ${new Date(item.created).toLocaleString('es-PE')}</div>${item.note ? `<p>${shareNoteMarkup(item.note)}</p>` : ''}<div class="submission-files">${files.length ? files.map(file => `<div class="submission-file-row"><span>${shareEscape(file.name)}</span><button type="button" data-action="download" data-id="${shareEscape(file.id)}" data-name="${shareEscape(file.name)}">Descargar</button></div>`).join('') : '<div class="mini">Esta entrega no tiene archivos adjuntos.</div>'}</div>${adminMode && item.status === 'Pendiente' ? `<div class="field"><label>Observaciones (obligatorias si devuelves)</label><textarea id="review-${shareEscape(item.id)}" placeholder="Qué debe corregirse"></textarea></div><div class="actions"><button class="good" data-action="review" data-id="${shareEscape(item.id)}" data-status="Aprobada">Aprobar</button><button class="warn" data-action="review" data-id="${shareEscape(item.id)}" data-status="Observada">Devolver con observaciones</button></div>` : adminMode && item.review ? `<p><b>Observaciones privadas:</b> ${shareEscape(item.review)}</p>` : ''}${adminMode && item.editRequestStatus === 'pending' ? `<div class="notice"><b>Solicita corregir este envío.</b><p>${shareEscape(item.editRequestNote || 'Sin motivo indicado')}</p><div class="actions"><button class="good" data-action="edit-decision" data-id="${shareEscape(item.id)}" data-status="authorized">Autorizar corrección</button><button data-action="edit-decision" data-id="${shareEscape(item.id)}" data-status="denied">Rechazar solicitud</button></div></div>` : ''}${!adminMode ? staffEditControls(item) : `<div class="actions"><button type="button" class="warn" data-action="delete-submission" data-id="${shareEscape(item.id)}">Eliminar esta entrega</button></div>`}</div></div>`;
   }).join('');
 }
 function staffEditControls(item) {
@@ -779,6 +853,7 @@ async function refreshSharedReportView() {
   }
   renderReportDocument();
   renderSharedReportSummary();
+  addAdminFileRemovalButtons();
 }
 
 async function shareApi(path, options = {}) {
@@ -849,6 +924,7 @@ function renderLiveSnapshot(snapshot) {
   liveAuditLog = snapshot.auditLog || [];
   reports = sharedReportItems.filter(item => item.kind !== 'valuation' && item.kind !== 'conformity').map(item => ({ id: item.id, title: item.title, number: item.number, date: item.documentDate, responsible: item.responsibleName || item.responsibleEmail, file: (item.files || []).map(file => file.name).join(', '), note: item.note, status: item.status === 'Aprobada' ? 'Aprobado' : item.status === 'Observada' ? 'Con observaciones' : 'Pendiente de revision', reviewNote: item.review, reviewDate: item.reviewed }));
   renderWorkers();
+  addWorkerRemovalButtons();
   renderAll();
   renderSharedReportSummary();
   renderControlConformities(sharedReportItems);
@@ -991,6 +1067,7 @@ async function renderShare() {
     if (me.role === 'admin') await renderAdmin(me);
     else await renderStaff(me);
     await renderControlInbox(me);
+    bindPendingFileRemoval();
   } catch {
     shareRoot.innerHTML = '<div class="card"><b>No se pudo abrir la sección de entregas.</b><p class="mu">Abre la aplicación con el botón “Iniciar centro de control”.</p></div>';
   }
@@ -1604,6 +1681,7 @@ async function renderAdmin(me) {
     shareApi('/api/submissions'),
     shareApi('/api/people')
   ]);
+  sharedReportItems = items;
   technicalSummaryItems = items;
   window.projectTeamAccounts = people;
   if (typeof renderWorkers === 'function') renderWorkers();
@@ -1613,6 +1691,7 @@ async function renderAdmin(me) {
   document.getElementById('submissionList').insertAdjacentHTML('beforebegin', `<div class="card"><h3>Guardar información antes de iniciar otro proyecto</h3><p class="mu">Descarga en un solo archivo el proyecto, las entregas y los documentos cargados. Esta opción está disponible solo para el administrador.</p><button class="pr" type="button" data-action="download-project-backup">Guardar y descargar copia completa</button></div>`);
   updateSectionClearButtons();
   document.getElementById('peopleList').innerHTML = people.map(person => `<div class="item"><b>${shareEscape(person.displayName || person.email)}</b><div class="mini">${shareEscape(person.email)}</div><div class="rw"><span class="mu">${roleLabel(person.role)}</span>${!person.active ? `<button data-action="invite-existing" data-email="${shareEscape(person.email)}">Crear código</button>` : ''}</div></div>`).join('');
+  addWorkerRemovalButtons();
   document.getElementById('submissionList').innerHTML = adminSubmissionGroups(items);
   document.getElementById('submissionList').insertAdjacentHTML('afterend', `<div class="card section-clear-tools"><h3>Limpiar Entregas</h3><p class="mini">Borra todos los informes, valorizaciones, órdenes y sus archivos adjuntos.</p><button class="warn section-clear-button" type="button" data-action="clear-section" data-section="entregas">↻ Borrar todas las entregas</button></div>`);
 }
@@ -1744,6 +1823,8 @@ async function renderControlInbox(me = null) {
       $('mObserved').textContent = items.filter(item => item.status === 'Observada').length;
       $('mPending').textContent = items.filter(item => item.status === 'Pendiente').length;
     }
+    addAdminFileRemovalButtons();
+    addWorkerRemovalButtons();
   } catch (error) {
     inbox.innerHTML = `<div class="card">${shareEscape(error.message)}</div>`;
   }
@@ -1870,6 +1951,7 @@ async function submitSharedReport(event) {
     if (qualityInput) qualityInput.value = '';
     const safetyInput = document.getElementById('reportSafetyFile');
     if (safetyInput) safetyInput.value = '';
+    bindPendingFileRemoval();
     const people = await shareApi('/api/people');
     populateResponsible(people, me.email);
     await renderControlInbox(me);
@@ -1942,6 +2024,7 @@ async function submitSharedConformity(event) {
     }) });
     document.getElementById('conformityFile').value = '';
     event.target.reset();
+    bindPendingFileRemoval();
     await renderControlInbox();
     await refreshSharedReportView();
     toast('Orden enviada para revisión.');
@@ -2001,8 +2084,21 @@ document.addEventListener('click', async event => {
       const section = button.dataset.section;
       const clearMessages = {
         project: 'Se borrarán los datos generales y técnicos del proyecto. Se conservarán trabajadores, historial y entregas.',
+        'project-general': 'Se borrarán solo nombre, entidad, modalidad, ubicación, código y descripción del proyecto.',
+        'project-technical': 'Se borrarán solo los datos técnicos del proyecto. Los datos generales y entregas se conservarán.',
+        'project-workers': 'Se borrarán todas las personas registradas en el equipo del proyecto.',
         control: 'Se borrarán los borradores sin enviar de los formularios de Control de todas las cuentas. Las entregas ya enviadas se conservarán.',
+        'control-report': 'Se borrarán los borradores de informe de todas las cuentas. Los informes enviados se conservarán.',
+        'control-valuation': 'Se borrarán los borradores de valorización de todas las cuentas. Las valorizaciones enviadas se conservarán.',
+        'control-conformity': 'Se borrarán los borradores de órdenes de todas las cuentas. Las órdenes enviadas se conservarán.',
         informe: 'Se borrarán las actividades, comentarios y fuentes semanales. El informe seguirá mostrando los datos del proyecto y las entregas que se conserven.',
+        'informe-activities': 'Se borrarán las actividades. Los comentarios y entregas se conservarán.',
+        'informe-comments': 'Se borrarán los comentarios. Las actividades y entregas se conservarán.',
+        'informe-history': 'Se borrará el historial anterior. Quedará un registro que indica que se reinició.',
+        'informe-sources': 'Se borrarán las fuentes semanales. Las actividades, comentarios y entregas se conservarán.',
+        'entregas-informes': 'Se borrarán todos los informes recibidos y sus archivos. Las valorizaciones y órdenes se conservarán.',
+        'entregas-valorizaciones': 'Se borrarán todas las valorizaciones recibidas y sus archivos. Los informes y órdenes se conservarán.',
+        'entregas-conformidades': 'Se borrarán todas las órdenes y conformidades recibidas y sus archivos.',
         entregas: 'Se borrarán todos los informes, valorizaciones, órdenes y archivos adjuntos. Esta acción no se puede deshacer. Descarga antes una copia si necesitas conservarlos.'
       };
       if (!clearMessages[section]) throw new Error('No reconozco el apartado que quieres limpiar.');
@@ -2013,10 +2109,25 @@ document.addEventListener('click', async event => {
         ['reportForm','valuationForm','conformityForm'].forEach(id => document.getElementById(id)?.reset());
         if (document.getElementById('reportDate')) document.getElementById('reportDate').value = today();
         if (document.getElementById('valuationPeriod')) document.getElementById('valuationPeriod').value = today();
+      } else if (section.startsWith('control-')) {
+        const draftSection = { 'control-report': ['report','reportForm','reportDate'], 'control-valuation': ['valuation','valuationForm','valuationPeriod'], 'control-conformity': ['conformity','conformityForm','conformityDate'] }[section];
+        if (draftSection) {
+          workerDraft[draftSection[0]] = {};
+          document.getElementById(draftSection[1])?.reset();
+          const dateInput = document.getElementById(draftSection[2]);
+          if (dateInput) dateInput.value = today();
+        }
       }
       await refreshAfterSectionClear();
-      toast(section === 'entregas' ? 'Entregas y archivos borrados.' : 'Apartado limpiado. El historial de cambios se conservó.');
-    } else if (action === 'download-project-backup') {
+      if (section === 'informe-comments') document.getElementById('commentForm')?.reset();
+      toast(section.startsWith('entregas') ? 'Entregas seleccionadas y archivos eliminados.' : 'Sección limpiada. El historial de cambios se conservó.');
+    } else if (action === 'delete-submission') {
+      if (currentUser?.role !== 'admin') throw new Error('Solo el administrador puede eliminar entregas.');
+      if (!window.confirm('Se eliminará esta entrega y los archivos que ya no se usen. El historial se conservará. ¿Deseas continuar?')) return;
+      await shareApi('/api/reset-section', { method: 'POST', body: JSON.stringify({ section: 'submission', id: button.dataset.id }) });
+      await refreshAfterSectionClear();
+      toast('Entrega eliminada. El historial de cambios se conservó.');
+   } else if (action === 'download-project-backup') {
       if (currentUser?.role !== 'admin') throw new Error('Solo el administrador puede descargar el respaldo completo.');
       const blob = await shareApi('/api/backup/download', { method: 'POST', body: JSON.stringify({}) });
       const link = document.createElement('a');
@@ -2093,6 +2204,19 @@ document.addEventListener('click', async event => {
       await shareApi('/api/people/role', { method: 'POST', body: JSON.stringify({ email: button.dataset.email, role: button.dataset.role }) });
       await renderShare();
       shareMessage(`Permiso actualizado: ahora esta persona es ${roleName}.`);
+    } else if (action === 'remove-person') {
+      if (currentUser?.role !== 'admin') throw new Error('Solo el administrador puede retirar trabajadores del proyecto.');
+      const personName = button.dataset.name || button.dataset.email;
+      if (!confirm(`¿Retirar a ${personName} del proyecto? Perderá el acceso, pero sus informes y archivos se conservarán.`)) return;
+      await shareApi('/api/people/remove', { method: 'POST', body: JSON.stringify({ email: button.dataset.email }) });
+      const removedEmail = String(button.dataset.email || '').toLowerCase();
+      window.projectTeamAccounts = (window.projectTeamAccounts || []).filter(person => String(person.email || '').toLowerCase() !== removedEmail);
+      button.closest('.worker-card, .item')?.remove();
+      const [snapshot, people] = await Promise.all([shareApi('/api/live'), shareApi('/api/people')]);
+      window.projectTeamAccounts = people;
+      renderLiveSnapshot(snapshot);
+      await renderShare();
+      toast('Trabajador retirado del proyecto. Sus entregas siguen guardadas.');
     } else if (action === 'refresh-tech-report') {
       const me = await shareApi('/api/me');
       const items = await shareApi(me.role === 'admin' ? '/api/submissions' : '/api/technical-summary');
@@ -2128,6 +2252,8 @@ document.addEventListener('click', async event => {
       shareMessage('Perfil guardado. El avatar ya aparece en Trabajadores y responsables.');
     } else if (action === 'remove-avatar') {
       profileAvatarDraft = '';
+      const avatarInput = document.getElementById('profileAvatar');
+      if (avatarInput) avatarInput.value = '';
       const preview = document.querySelector('.profile-avatar-preview');
       if (preview) { const empty = document.createElement('div'); empty.className = 'profile-avatar-preview profile-avatar-empty'; empty.textContent = '+'; preview.replaceWith(empty); }
       shareMessage('Avatar quitado. Guarda el perfil para confirmar el cambio.');
@@ -2214,6 +2340,23 @@ document.addEventListener('click', async event => {
       details.classList.toggle('hidden', !expand);
       button.textContent = expand ? 'Contraer' : 'Desplegar';
       button.setAttribute('aria-expanded', String(expand));
+    } else if (action === 'delete-file') {
+      if (currentUser?.role !== 'admin') throw new Error('Solo el administrador puede eliminar archivos enviados.');
+      const fileName = button.dataset.name || 'este archivo';
+      if (!confirm(`¿Eliminar "${fileName}"? La entrega y sus otros archivos se conservarán.`)) return;
+      await shareApi(`/api/submissions/${button.dataset.submissionId}/files/${button.dataset.id}/delete`, { method: 'POST' });
+      await renderShare();
+      await refreshSharedReportView();
+      toast('Archivo eliminado.');
+    } else if (action === 'remove-pending-file') {
+      const input = document.getElementById(button.dataset.input);
+      const removeIndex = Number(button.dataset.index);
+      const files = Array.from(input?.files || []);
+      if (!input || !Number.isInteger(removeIndex) || !files[removeIndex]) return;
+      const transfer = new DataTransfer();
+      files.forEach((file, index) => { if (index !== removeIndex) transfer.items.add(file); });
+      input.files = transfer.files;
+      renderPendingFileList(input);
     } else if (action === 'remove-valuation-file') {
       const input = document.getElementById('valuationFile');
       const removeIndex = Number(button.dataset.index);
