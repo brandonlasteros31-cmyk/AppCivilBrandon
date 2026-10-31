@@ -1,5 +1,5 @@
-<!DOCTYPE html>
-<html lang="es">
+﻿<!DOCTYPE html>
+<html lang="es-PE">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Centro de Control de Obra</title>
@@ -77,7 +77,7 @@ main{max-width:1440px;padding:clamp(14px,2.2vw,28px)}.weekbar{gap:12px;padding:1
 </div></div>
 
 
-<div class="card"><h3>Datos del proyecto</h3><p class="muted">Los cambios se guardan en el servidor local y aparecen en las demás sesiones. El informe conserva un historial de actividad.</p><div class="actions"><button id="exportData">Exportar datos (.json)</button></div></div>
+<div class="card"><h3>Datos del proyecto</h3><p class="muted">Los cambios se guardan en el servidor local y aparecen en las demás sesiones. El informe conserva un historial de actividad.</p><div class="actions"><button id="exportData">Exportar datos (.json)</button><button class="primary section-clear-button hidden" type="button" data-action="download-project-backup">Guardar proyecto completo (.zip)</button></div><p class="mini">Incluye la información del proyecto y los documentos adjuntos, organizados en una carpeta.</p></div>
 </section>
 <section id="control" class="tabpage hidden"><div id="historicalUploadPanel" class="card hidden"><h3>Registro de información histórica</h3><label style="display:flex;align-items:center;gap:9px"><input id="allowHistoricalDate" type="checkbox" style="width:auto;min-height:0"> Permitir fechas anteriores a hoy</label><p id="historicalUploadStatus" class="mini">Desactivada: las fechas no pueden ser anteriores a hoy.</p><p class="mini">Disponible solo para administradores. Las fechas cargadas deben estar dentro del inicio y fin o plazo del proyecto.</p></div>
 <div class="hidden" aria-hidden="true"><textarea id="srcReports"></textarea><textarea id="srcActivities"></textarea><textarea id="srcComments"></textarea><textarea id="srcOther"></textarea><button id="saveSources" type="button"></button></div>
@@ -160,7 +160,8 @@ renderWorkers = function () {
     const button = document.createElement('button');
     button.type = 'button'; button.className = 'warn'; button.textContent = 'Retirar del proyecto';
     button.dataset.action = 'remove-person'; button.dataset.email = person.email; button.dataset.name = person.displayName || person.email;
+    button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); removeProjectPerson(button.dataset.email, button.dataset.name, button); });
     actions.appendChild(button);
   }
 };
-</script><script src="centro-control-share.js?v=20261030-35"></script></body></html>
+</script><script src="centro-control-share.js?v=20261030-37"></script></body></html>

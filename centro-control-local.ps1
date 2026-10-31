@@ -539,13 +539,13 @@ function Handle-Request($Context) {
         return
     }
     if ($method -eq 'POST' -and $path -eq '/api/workspace') {
-        if (-not $user) { Send-Json $Context @{ error = 'Inicia sesiÃ³n para actualizar el espacio de trabajo.' } 401; return }
+        if (-not $user) { Send-Json $Context @{ error = 'Inicia sesión para actualizar el espacio de trabajo.' } 401; return }
         $data = Read-Json $Context
         $section = [string]$data.section
         $action = [string]$data.action
-        if ($section -notin @('workers','activities','comments','sources')) { Send-Json $Context @{ error = 'SecciÃ³n no vÃ¡lida.' } 400; return }
+        if ($section -notin @('workers','activities','comments','sources')) { Send-Json $Context @{ error = 'Sección no válida.' } 400; return }
         if ($section -eq 'sources') {
-            if ($action -ne 'set') { Send-Json $Context @{ error = 'AcciÃ³n no vÃ¡lida para las fuentes.' } 400; return }
+            if ($action -ne 'set') { Send-Json $Context @{ error = 'Acción no válida para las fuentes.' } 400; return }
             $weekKey = [string]$data.weekKey
             if ($weekKey -notmatch '^\d{4}-\d{2}-\d{2}$') { Send-Json $Context @{ error = 'La semana no es válida.' } 400; return }
             $byWeek = @{}
@@ -608,7 +608,7 @@ function Handle-Request($Context) {
                     if ($changes.Count) { $detail += ' | ' + ($changes -join '; ') }
                     Save-State ($section + ' actualizado') $detail
                 }
-            } else { Send-Json $Context @{ error = 'AcciÃ³n no vÃ¡lida.' } 400; return }
+            } else { Send-Json $Context @{ error = 'Acción no válida.' } 400; return }
         }
         Send-Json $Context @{ revision = [int]$script:State.revision; workspace = $script:State.workspace; auditLog = @($script:State.auditLog | Select-Object -Last 100 | Sort-Object at -Descending) }
         return
@@ -694,17 +694,21 @@ function Handle-Request($Context) {
         $account = @($script:State.users | Where-Object { ([string]$_.email).ToLowerInvariant() -eq $email } | Select-Object -First 1)[0]
         if ($account -and [string]$account.role -eq 'admin') { Send-Json $Context @{ error = 'No puedes retirar una cuenta administradora desde el equipo de trabajadores.' } 400; return }
         $isAuthorized = @($script:State.allowedEmails | Where-Object { ([string]$_).Trim().ToLowerInvariant() -eq $email }).Count -gt 0
-        if (-not $account -and -not $isAuthorized) { Send-Json $Context @{ error = 'Ese trabajador ya no está en el proyecto.' } 404; return }
+        $hasInvitation = @($script:State.invitations | Where-Object { ([string]$_.email).Trim().ToLowerInvariant() -eq $email }).Count -gt 0
         $personName = if ($account.displayName) { [string]$account.displayName } else { $email }
+        $matchedWorkerIds = @($script:State.workspace.workers | Where-Object { ([string]$_.contact).Trim().ToLowerInvariant() -eq $email } | ForEach-Object { [string]$_.id })
+        if ($matchedWorkerIds.Count -eq 0 -and $account -and $personName -ne $email) {
+            $matchedWorkerIds = @($script:State.workspace.workers | Where-Object { ([string]$_.name).Trim().ToLowerInvariant() -eq $personName.Trim().ToLowerInvariant() } | ForEach-Object { [string]$_.id })
+        }
+        if (-not $account -and -not $isAuthorized -and -not $hasInvitation -and $matchedWorkerIds.Count -eq 0) {
+            Send-Json $Context @{ ok = $true; email = $email; removedWorkers = 0; alreadyRemoved = $true }
+            return
+        }
         $script:State.users = @($script:State.users | Where-Object { ([string]$_.email).ToLowerInvariant() -ne $email })
         $script:State.allowedEmails = @($script:State.allowedEmails | Where-Object { ([string]$_).Trim().ToLowerInvariant() -ne $email })
         $script:State.invitations = @($script:State.invitations | Where-Object { ([string]$_.email).ToLowerInvariant() -ne $email })
         foreach ($token in @($script:Sessions.Keys)) { if ([string]$script:Sessions[$token] -eq $email) { $script:Sessions.Remove($token) } }
         $previousWorkerCount = @($script:State.workspace.workers).Count
-        $matchedWorkerIds = @($script:State.workspace.workers | Where-Object { ([string]$_.contact).Trim().ToLowerInvariant() -eq $email } | ForEach-Object { [string]$_.id })
-        if ($matchedWorkerIds.Count -eq 0 -and $personName -ne $email) {
-            $matchedWorkerIds = @($script:State.workspace.workers | Where-Object { ([string]$_.name).Trim().ToLowerInvariant() -eq $personName.Trim().ToLowerInvariant() } | Select-Object -First 1 | ForEach-Object { [string]$_.id })
-        }
         $remainingWorkers = if ($matchedWorkerIds.Count -gt 0) { @($script:State.workspace.workers | Where-Object { [string]$_.id -notin $matchedWorkerIds }) } else { @($script:State.workspace.workers) }
         $script:State.workspace.workers = $remainingWorkers
         $removedWorkerCount = $previousWorkerCount - @($remainingWorkers).Count
@@ -743,6 +747,12 @@ function Handle-Request($Context) {
         $archive = [System.IO.Compression.ZipArchive]::new($archiveMemory, [System.IO.Compression.ZipArchiveMode]::Create, $true)
         $fileManifest = [System.Collections.Generic.List[object]]::new()
         try {
+            $projectFolder = [string]$script:State.project.name
+            if (-not $projectFolder.Trim()) { $projectFolder = 'Proyecto-sin-nombre' }
+            $projectFolder = [System.Text.RegularExpressions.Regex]::Replace($projectFolder, '[\x00-\x1F\\/:*?"<>|]', '_').Trim(' ','.')
+            if (-not $projectFolder) { $projectFolder = 'Proyecto-sin-nombre' }
+            $projectFileName = [System.Text.RegularExpressions.Regex]::Replace($projectFolder, '\s+', '-').Trim('-','.','_')
+            if (-not $projectFileName) { $projectFileName = 'proyecto' }
             foreach ($item in @($script:State.submissions)) {
                 $dateText = if ($item.kind -eq 'valuation') { [string]$item.valuationPeriod } elseif ($item.kind -eq 'conformity') { [string]$item.conformityDate } else { [string]$item.documentDate }
                 if (-not $dateText) { $dateText = [string]$item.created }
@@ -759,7 +769,7 @@ function Handle-Request($Context) {
                     if ($included) {
                         $safeFile = [System.Text.RegularExpressions.Regex]::Replace([string]$file.name, '[\x00-\x1F\\/:*?"<>|]', '_').Trim(' ','.')
                         if (-not $safeFile) { $safeFile = 'archivo' }
-                        $archivePath = 'archivos/' + $month + '/' + $folder + '/' + $safeTitle + '-' + $shortId + '/' + $safeFile
+                        $archivePath = $projectFolder + '/archivos/' + $month + '/' + $folder + '/' + $safeTitle + '-' + $shortId + '/' + $safeFile
                         $entry = $archive.CreateEntry($archivePath, [System.IO.Compression.CompressionLevel]::Optimal)
                         $entryStream = $entry.Open()
                         try { $bytes = [System.IO.File]::ReadAllBytes($diskPath); $entryStream.Write($bytes,0,$bytes.Length) } finally { $entryStream.Dispose() }
@@ -782,12 +792,13 @@ function Handle-Request($Context) {
             }
             $json = ConvertTo-Json -InputObject $backupData -Depth 40
             $jsonBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($json)
-            $jsonEntry = $archive.CreateEntry('respaldo/datos-proyecto.json', [System.IO.Compression.CompressionLevel]::Optimal)
+            $jsonEntry = $archive.CreateEntry($projectFolder + '/respaldo/datos-proyecto.json', [System.IO.Compression.CompressionLevel]::Optimal)
             $jsonStream = $jsonEntry.Open()
             try { $jsonStream.Write($jsonBytes,0,$jsonBytes.Length) } finally { $jsonStream.Dispose() }
             $readme = "Respaldo completo del Centro de Control de Obra.`r`n`r`nEl archivo datos-proyecto.json contiene el proyecto, el equipo, las entregas, el historial y la relación de archivos. La carpeta archivos reúne los documentos adjuntos ordenados por mes. Los usuarios se incluyen sin contraseñas ni claves de acceso.`r`n"
+            $readme = "Carpeta del proyecto: $projectFolder.`r`n`r`n" + $readme
             $readmeBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($readme)
-            $readmeEntry = $archive.CreateEntry('LEEME.txt', [System.IO.Compression.CompressionLevel]::Optimal)
+            $readmeEntry = $archive.CreateEntry($projectFolder + '/LEEME.txt', [System.IO.Compression.CompressionLevel]::Optimal)
             $readmeStream = $readmeEntry.Open()
             try { $readmeStream.Write($readmeBytes,0,$readmeBytes.Length) } finally { $readmeStream.Dispose() }
             $archive.Dispose()
@@ -795,7 +806,7 @@ function Handle-Request($Context) {
             $archiveMemory.Dispose()
             $stamp = (Get-Date).ToString('yyyyMMdd-HHmm')
             $Context.Response.ContentType = 'application/zip'
-            $Context.Response.Headers.Add('Content-Disposition', 'attachment; filename="Respaldo-proyecto-' + $stamp + '.zip"')
+            $Context.Response.Headers.Add('Content-Disposition', 'attachment; filename="Respaldo-' + $projectFileName + '-' + $stamp + '.zip"')
             $Context.Response.ContentLength64 = $archiveBytes.Length
             $Context.Response.OutputStream.Write($archiveBytes,0,$archiveBytes.Length)
             $Context.Response.Close()
@@ -808,10 +819,10 @@ function Handle-Request($Context) {
         }
     }
     if ($method -eq 'POST' -and $path -eq '/api/submissions/month-download') {
-        if (-not $user) { Send-Json $Context @{ error = 'Inicia sesiÃ³n.' } 401; return }
+        if (-not $user) { Send-Json $Context @{ error = 'Inicia sesión.' } 401; return }
         $data = Read-Json $Context
         $month = [string]$data.month
-        if ($month -notmatch '^(\d{4}-(0[1-9]|1[0-2])|sin-fecha)$') { Send-Json $Context @{ error = 'Selecciona un mes vÃ¡lido.' } 400; return }
+        if ($month -notmatch '^(\d{4}-(0[1-9]|1[0-2])|sin-fecha)$') { Send-Json $Context @{ error = 'Selecciona un mes válido.' } 400; return }
         $monthItems = @($script:State.submissions | Where-Object {
             $item = $_
             if ($user.role -ne 'admin' -and [string]$item.email -ne [string]$user.email) { return $false }
@@ -1136,25 +1147,15 @@ function Write-TcpResponse($Client, $Context) {
     if ($body.Length -gt 0) { $stream.Write($body, 0, $body.Length) }
     $stream.Flush()
 }
-$bindAddress = [System.Net.IPAddress]::Any
-if (-not [string]::IsNullOrWhiteSpace($env:CENTRO_CONTROL_BIND_ADDRESS)) { $bindAddress = [System.Net.IPAddress]::Parse($env:CENTRO_CONTROL_BIND_ADDRESS) }
+$bindAddress = [System.Net.IPAddress]::Loopback
 $listener = [System.Net.Sockets.TcpListener]::new($bindAddress, 8765)
 try {
     $listener.Start()
-    $networkIP = $null
-    try { $networkIP = Get-NetIPConfiguration | Where-Object { $_.NetAdapter.Status -eq 'Up' -and $_.IPv4DefaultGateway } | ForEach-Object { $_.IPv4Address.IPAddress } | Select-Object -First 1 } catch { $networkIP = $null }
-    if (-not $networkIP) {
-        if ($env:OS -eq 'Windows_NT') {
-            $ipconfigText = (& ipconfig.exe 2>$null) -join "`n"
-            $networkIP = [regex]::Matches($ipconfigText, '(?im)IPv4[^:\r\n]*:\s*((?:\d{1,3}\.){3}\d{1,3})') | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -ne '127.0.0.1' -and $_ -notlike '169.254.*' } | Select-Object -First 1
-        } else {
-            $networkIP = ((& hostname -I 2>$null) -split '\s+' | Where-Object { $_ -match '^(?!127\.)(?!169\.254\.)\d{1,3}(?:\.\d{1,3}){3}$' } | Select-Object -First 1)
-        }
+    Write-Host 'Centro de control listo en esta computadora: http://localhost:8765/antes-fechas'
+    Write-Host 'Solo es accesible desde esta computadora. Deja esta ventana abierta mientras lo usas.'
+    if ($env:CENTRO_CONTROL_NO_OPEN -ne '1') {
+        try { Start-Process 'http://localhost:8765/antes-fechas' } catch { Write-Host 'Abre el centro de control manualmente en http://localhost:8765/antes-fechas' }
     }
-    Write-Host 'Centro de control listo en esta computadora: http://localhost:8765'
-    if ($networkIP) { Write-Host "Para la otra laptop conectada a la misma red Wi-Fi: http://${networkIP}:8765/" }
-    Write-Host 'Deja esta ventana abierta mientras lo usas. Para apagarlo, presiona Ctrl+C.'
-    try { Start-Process 'http://localhost:8765/' } catch { Write-Host 'Abre el centro de control manualmente en http://localhost:8765/' }
     while ($true) {
         $client = $listener.AcceptTcpClient()
         $context = $null

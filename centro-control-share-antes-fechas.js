@@ -96,8 +96,33 @@ function addWorkerRemovalButtons() {
       button.dataset.email = person.email;
       button.dataset.name = person.displayName || person.email;
       button.textContent = 'Retirar del proyecto';
+      button.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        removeProjectPerson(button.dataset.email, button.dataset.name, button);
+      });
       actions.appendChild(button);
     }
+  }
+}
+
+async function removeProjectPerson(email, name, button) {
+  if (currentUser?.role !== 'admin') { toast('Solo el administrador puede retirar trabajadores del proyecto.'); return; }
+  if (!confirm(`¿Retirar a ${name || email} del proyecto? Perderá el acceso, pero sus informes y archivos se conservarán.`)) return;
+  button.disabled = true;
+  try {
+    await shareApi('/api/people/remove', { method: 'POST', body: JSON.stringify({ email }) });
+    const removedEmail = String(email || '').toLowerCase();
+    window.projectTeamAccounts = (window.projectTeamAccounts || []).filter(person => String(person.email || '').toLowerCase() !== removedEmail);
+    button.closest('.worker-card, .item')?.remove();
+    const [snapshot, people] = await Promise.all([shareApi('/api/live'), shareApi('/api/people')]);
+    window.projectTeamAccounts = people;
+    renderLiveSnapshot(snapshot);
+    await renderShare();
+    toast('Trabajador retirado del proyecto. Sus entregas siguen guardadas.');
+  } catch (error) {
+    button.disabled = false;
+    toast(error.message || 'No se pudo retirar al trabajador.');
   }
 }
 
@@ -259,10 +284,13 @@ function refreshReportTemplateLibrary() {
 
 async function loadUbigeoCatalog() {
   try {
-    ubigeoCatalog = await fetch('/centro-control-ubigeo.json', { cache: 'no-store' }).then(response => {
+    ubigeoCatalog = window.CENTRO_OFFLINE_MODE
+      ? window.CENTRO_OFFLINE_SEED?.ubigeo
+      : await fetch('/centro-control-ubigeo.json', { cache: 'no-store' }).then(response => {
       if (!response.ok) throw new Error('No se pudo cargar la lista de ubicaciones.');
       return response.json();
     });
+    if (!ubigeoCatalog) throw new Error('No se pudo cargar la lista de ubicaciones.');
     const select = document.getElementById('projectDepartment');
     if (!select) return;
     select.innerHTML = '<option value="">Selecciona un departamento</option>' + ubigeoCatalog.departments.map(item => `<option value="${shareEscape(item.id)}">${shareEscape(item.name)}</option>`).join('');
@@ -372,14 +400,68 @@ async function saveSharedProject(silent = false) {
   }
 }
 
+function setTopLogoutVisible(visible) {
+  document.getElementById('topLogout')?.classList.toggle('hidden', !visible);
+}
+
+function entryLandingMarkup(accessPanel, message = '') {
+  return `<div class="entry-landing">
+    <div class="entry-utility-bar"><span>GESTIÓN DE OBRA CIVIL</span><span>CONTROL LOCAL · ${new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}</span></div>
+    <header class="entry-brand-bar"><div class="entry-brand"><span class="entry-brand-mark">CC</span><span><b>Centro de Control de Obra</b><small>Seguimiento claro para cada proyecto</small></span></div><span class="entry-brand-note">PROYECTO · AVANCE · ENTREGAS</span></header>
+    <main class="entry-main">
+      <section class="entry-hero">
+        <div class="entry-eyebrow"><i></i> TU ESPACIO DE TRABAJO</div>
+        <h1>La obra avanza.<br><span>Tu información, en orden.</span></h1>
+        <p>Un solo lugar para organizar el proyecto, revisar entregas y dar seguimiento a cada actividad.</p>
+        <div class="entry-illustration-card">
+          <div class="entry-illustration-label"><span class="entry-live-dot"></span> CONTROL DE OBRA · LOCAL</div>
+          <svg class="entry-civil-art" viewBox="0 0 720 390" role="img" aria-label="Ilustración de una obra civil con edificio, grúa y planos">
+            <defs>
+              <linearGradient id="entrySky" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#102d52"/><stop offset="1" stop-color="#2780F5"/></linearGradient>
+              <linearGradient id="entryBuilding" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e8f3ff"/><stop offset="1" stop-color="#9fc8fa"/></linearGradient>
+              <pattern id="entryGrid" width="36" height="36" patternUnits="userSpaceOnUse"><path d="M36 0H0V36" fill="none" stroke="#d9eaff" stroke-opacity=".14" stroke-width="1"/></pattern>
+            </defs>
+            <rect width="720" height="390" rx="20" fill="url(#entrySky)"/><rect width="720" height="390" rx="20" fill="url(#entryGrid)"/>
+            <circle cx="563" cy="89" r="55" fill="#a9ceff" fill-opacity=".12"/><path d="M28 326H692" stroke="#dcecff" stroke-opacity=".55" stroke-width="2"/>
+            <g class="entry-blueprint-lines" fill="none" stroke="#e3f0ff" stroke-opacity=".46" stroke-width="2"><path d="M59 284V91H212V284M59 142H212M59 194H212M111 91V284M161 91V284"/><path d="M45 303H226M49 82H222M49 76V88M222 76V88"/><path d="M70 114H95M122 114H147M173 114H199M70 165H95M122 165H147M173 165H199M70 217H95M122 217H147M173 217H199"/></g>
+            <g class="entry-building">
+              <path d="M268 326V202L357 155L446 202V326Z" fill="url(#entryBuilding)" stroke="#f1f7ff" stroke-width="3"/>
+              <path d="M268 202H446M268 244H446M268 285H446M357 155V326" fill="none" stroke="#5489c8" stroke-width="3"/>
+              <path d="M286 215H336V235H286ZM378 215H428V235H378ZM286 256H336V276H286ZM378 256H428V276H378ZM286 297H336V317H286ZM378 297H428V317H378Z" fill="#75a9e9" stroke="#eaf4ff" stroke-width="2"/>
+              <path d="M250 326H464" stroke="#fff" stroke-opacity=".9" stroke-width="5"/>
+            </g>
+            <g class="entry-crane" fill="none" stroke="#ffe3a0" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M520 326V78M507 326H533M520 78L511 326M520 78L529 326" stroke-width="5"/>
+              <path d="M337 91H625M520 91L573 61M355 91L377 61H520" stroke-width="6"/>
+              <path d="M363 91V104M408 91V105M463 91V102M576 91V115" stroke-width="2"/>
+              <path d="M405 91V137Q405 151 417 151Q429 151 429 137" stroke-width="3"/>
+              <path d="M510 78L520 58L530 78M492 326H548" stroke-width="3"/>
+            </g>
+            <g fill="#fff" fill-opacity=".8"><circle cx="87" cy="54" r="3"/><circle cx="105" cy="54" r="3"/><circle cx="123" cy="54" r="3"/><circle cx="87" cy="72" r="3"/><circle cx="105" cy="72" r="3"/><circle cx="123" cy="72" r="3"/></g>
+            <path d="M24 350H696" stroke="#dbeaff" stroke-opacity=".18"/>
+          </svg>
+          <div class="entry-illustration-caption"><span><b>CONTROL DE PROYECTO</b><small>Información organizada para decidir mejor</small></span><span class="entry-caption-mark">01</span></div>
+        </div>
+        <div class="entry-benefits"><span>✓ Seguimiento semanal</span><span>✓ Documentos ordenados</span><span>✓ Equipo coordinado</span></div>
+      </section>
+      <section class="entry-access-panel">${accessPanel}</section>
+    </main>
+    <footer class="entry-footer"><span>Centro de Control de Obra</span><span>Gestión local · los datos permanecen en este equipo</span></footer>
+  </div>`;
+}
+
 async function renderEntryGate(message = '') {
+  document.body.classList.add('auth-initializing');
+  setTopLogoutVisible(false);
   let status;
   try {
     status = await shareApi('/api/status');
     const me = await shareApi('/api/me').catch(() => null);
     if (me) {
+      setTopLogoutVisible(true);
       closeEntryGate();
       await loadSharedProject();
+      document.body.classList.remove('auth-initializing');
       return;
     }
   } catch {
@@ -393,13 +475,16 @@ async function renderEntryGate(message = '') {
     gate.id = 'entryGate';
     document.body.appendChild(gate);
   }
-  gate.style.cssText = 'position:fixed;inset:0;z-index:1000;overflow:auto;background:var(--bg);display:grid;place-items:center;padding:18px';
+  gate.style.cssText = 'position:fixed;inset:0;z-index:1000;overflow:auto;background:var(--bg);display:block;padding:0';
   document.body.style.overflow = 'hidden';
   if (status.setup) {
-    gate.innerHTML = `<div class="card" style="width:min(440px,100%);margin:0"><h2>Crear acceso de administrador</h2><p class="muted">Configura la cuenta que administrará los informes.</p><label>Correo</label><input id="adminEmail" type="email" value="brandonlasteros31@gmail.com" readonly><label>Contraseña (mínimo 10 caracteres)</label><input id="adminPassword" type="password" autocomplete="new-password"><label>Repite la contraseña</label><input id="adminConfirm" type="password" autocomplete="new-password"><div class="actions"><button class="primary" data-action="setup">Crear acceso</button></div><p id="entryMessage">${shareEscape(message)}</p></div>`;
+    gate.innerHTML = entryLandingMarkup(`<div class="entry-auth-card"><div class="entry-auth-icon">✦</div><div class="entry-auth-kicker">CONFIGURACIÓN INICIAL</div><h2>Crear acceso de administrador</h2><p class="entry-auth-copy">Configura la cuenta que administrará los informes.</p><div class="entry-gate-fields"><div class="entry-gate-field"><label for="adminEmail">Correo</label><input id="adminEmail" type="email" value="brandonlasteros31@gmail.com" readonly></div><div class="entry-gate-field"><label for="adminPassword">Contraseña (mínimo 10 caracteres)</label><input id="adminPassword" type="password" autocomplete="new-password"></div><div class="entry-gate-field"><label for="adminConfirm">Repite la contraseña</label><input id="adminConfirm" type="password" autocomplete="new-password"></div></div><div class="entry-gate-actions"><button class="primary" data-action="setup">Crear acceso</button></div><p id="entryMessage" class="entry-gate-message">${shareEscape(message)}</p></div>`, message);
+    document.body.classList.remove('auth-initializing');
     return;
   }
-  gate.innerHTML = `<div class="entry-gate-shell"><div class="card entry-gate-heading"><h1>Centro de control</h1><p>Inicia sesión para continuar.</p></div><div class="entry-gate-options"><div class="card entry-gate-option"><h2>Iniciar sesión</h2><p class="entry-gate-help">Ingresa con el correo autorizado por la administración.</p><div class="entry-gate-fields"><div class="entry-gate-field"><label for="loginEmail">Correo autorizado</label><input id="loginEmail" type="email" autocomplete="username"></div><div class="entry-gate-field"><label for="loginPassword">Contraseña</label><input id="loginPassword" type="password" autocomplete="current-password"></div></div><div class="entry-gate-actions"><button class="primary" data-action="login">Entrar</button></div></div><div class="card entry-gate-option"><h2>Activar cuenta</h2><p class="entry-gate-help">Primero pide una invitación a la persona administradora.</p><div class="entry-gate-fields"><div class="entry-gate-field"><label for="activateName">Nombre completo</label><input id="activateName" autocomplete="name"></div><div class="entry-gate-field"><label for="activateEmail">Correo autorizado</label><input id="activateEmail" type="email" autocomplete="email"></div><div class="entry-gate-field"><label for="inviteCode">Código de invitación</label><input id="inviteCode" autocomplete="one-time-code"></div><div class="entry-gate-field"><label for="activatePassword">Crea una contraseña</label><input id="activatePassword" type="password" autocomplete="new-password"></div><div class="entry-gate-field"><label for="activateConfirm">Repite la contraseña</label><input id="activateConfirm" type="password" autocomplete="new-password"></div></div><div class="entry-gate-actions"><button data-action="activate">Activar cuenta</button></div></div></div><p id="entryMessage" class="entry-gate-message">${shareEscape(message)}</p></div>`;
+  const accessPanel = `<div class="entry-form-heading"><h2>Centro de control</h2><p>Inicia sesión para continuar.</p></div><div class="entry-auth-card"><div class="entry-auth-icon">↗</div><div class="entry-auth-kicker">ACCESO AL PROYECTO</div><h2>Iniciar sesión</h2><p class="entry-auth-copy">Ingresa con el correo autorizado por la administración.</p><div class="entry-gate-fields"><div class="entry-gate-field"><label for="loginEmail">Correo autorizado</label><input id="loginEmail" type="email" autocomplete="username"></div><div class="entry-gate-field"><label for="loginPassword">Contraseña</label><input id="loginPassword" type="password" autocomplete="current-password"></div></div><div class="entry-gate-actions"><button class="primary" data-action="login">Entrar</button></div><p id="entryMessage" class="entry-gate-message">${shareEscape(message)}</p></div><div class="entry-auth-card entry-activation-card"><div class="entry-auth-icon entry-activation-icon">＋</div><div class="entry-auth-kicker">NUEVO INTEGRANTE</div><h2>Activar cuenta</h2><p class="entry-auth-copy">Primero pide una invitación a la persona administradora.</p><div class="entry-gate-fields"><div class="entry-gate-field"><label for="activateName">Nombre completo</label><input id="activateName" autocomplete="name"></div><div class="entry-gate-field"><label for="activateEmail">Correo autorizado</label><input id="activateEmail" type="email" autocomplete="email"></div><div class="entry-gate-field"><label for="inviteCode">Código de invitación</label><input id="inviteCode" autocomplete="one-time-code"></div><div class="entry-gate-field"><label for="activatePassword">Crea una contraseña</label><input id="activatePassword" type="password" autocomplete="new-password"></div><div class="entry-gate-field"><label for="activateConfirm">Repite la contraseña</label><input id="activateConfirm" type="password" autocomplete="new-password"></div></div><div class="entry-gate-actions"><button data-action="activate">Activar cuenta</button></div></div>`;
+  gate.innerHTML = entryLandingMarkup(accessPanel, message);
+  document.body.classList.remove('auth-initializing');
 }
 
 function prepareControlInbox() {
@@ -688,9 +773,9 @@ function renderValuationsReport(items) {
   const y = value => top + (100 - Math.max(0, Math.min(100, Number(value) || 0))) / 100 * plotHeight;
   const makePath = key => valuations.map((item, index) => `${index ? 'L' : 'M'} ${x(index).toFixed(1)} ${y(item[key]).toFixed(1)}`).join(' ');
   const grid = [0, 25, 50, 75, 100].map(value => `<g><line x1="${left}" y1="${y(value)}" x2="${width - right}" y2="${y(value)}" stroke="#d8dee7"/><text x="${left - 8}" y="${y(value) + 4}" text-anchor="end" fill="#667389" font-size="11">${value}%</text></g>`).join('');
-  const dots = key => valuations.map((item, index) => `<circle cx="${x(index)}" cy="${y(item[key])}" r="4" fill="${key === 'plannedProgress' ? '#2f7fe0' : '#1e9e6a'}"><title>${shareEscape(item.valuationNumber || item.title)}: ${Number(item[key]).toFixed(2)}%</title></circle>`).join('');
+  const dots = key => valuations.map((item, index) => `<circle cx="${x(index)}" cy="${y(item[key])}" r="4" fill="${key === 'plannedProgress' ? '#2780F5' : '#1e9e6a'}"><title>${shareEscape(item.valuationNumber || item.title)}: ${Number(item[key]).toFixed(2)}%</title></circle>`).join('');
   const labels = valuations.map((item, index) => `<text x="${x(index)}" y="${height - 28}" text-anchor="middle" fill="#667389" font-size="10">${shareEscape(fmt(item.valuationPeriod))}</text>`).join('');
-  chart.innerHTML = `<svg role="img" aria-label="Curva S: avance programado y ejecutado" viewBox="0 0 ${width} ${height}" style="width:100%;height:auto"><text x="${left}" y="14" fill="#1b2638" font-size="12" font-weight="600">Avance acumulado (%)</text>${grid}<path d="${makePath('plannedProgress')}" fill="none" stroke="#2f7fe0" stroke-width="3"/>${dots('plannedProgress')}<path d="${makePath('actualProgress')}" fill="none" stroke="#1e9e6a" stroke-width="3"/>${dots('actualProgress')}${labels}<g transform="translate(${left},${height - 7})"><line x1="0" y1="0" x2="20" y2="0" stroke="#2f7fe0" stroke-width="3"/><text x="26" y="4" fill="#1b2638" font-size="11">Programado</text><line x1="126" y1="0" x2="146" y2="0" stroke="#1e9e6a" stroke-width="3"/><text x="152" y="4" fill="#1b2638" font-size="11">Ejecutado</text></g></svg>`;
+  chart.innerHTML = `<svg role="img" aria-label="Curva S: avance programado y ejecutado" viewBox="0 0 ${width} ${height}" style="width:100%;height:auto"><text x="${left}" y="14" fill="#1b2638" font-size="12" font-weight="600">Avance acumulado (%)</text>${grid}<path d="${makePath('plannedProgress')}" fill="none" stroke="#2780F5" stroke-width="3"/>${dots('plannedProgress')}<path d="${makePath('actualProgress')}" fill="none" stroke="#1e9e6a" stroke-width="3"/>${dots('actualProgress')}${labels}<g transform="translate(${left},${height - 7})"><line x1="0" y1="0" x2="20" y2="0" stroke="#2780F5" stroke-width="3"/><text x="26" y="4" fill="#1b2638" font-size="11">Programado</text><line x1="126" y1="0" x2="146" y2="0" stroke="#1e9e6a" stroke-width="3"/><text x="152" y="4" fill="#1b2638" font-size="11">Ejecutado</text></g></svg>`;
 }
 
 function renderConformitiesReport(items) {
@@ -857,6 +942,7 @@ async function refreshSharedReportView() {
 }
 
 async function shareApi(path, options = {}) {
+  if (window.CENTRO_OFFLINE_MODE) return window.CentroOfflineApi(path, options);
   const headers = { ...(options.headers || {}) };
   const token = sessionStorage.getItem(SHARE_TOKEN);
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -1060,10 +1146,12 @@ async function renderShare() {
     let me = null;
     try { me = await shareApi('/api/me'); } catch {}
     if (!me) {
+      setTopLogoutVisible(false);
       renderAccess(status.setup);
       await renderControlInbox(null);
       return;
     }
+    setTopLogoutVisible(true);
     if (me.role === 'admin') await renderAdmin(me);
     else await renderStaff(me);
     await renderControlInbox(me);
@@ -1250,7 +1338,7 @@ function printTechnicalReport(items, isAdmin) {
   if (!printWindow) { toast('El navegador bloqueó la ventana de impresión. Permite ventanas emergentes para guardar el informe.'); return; }
   const content = technicalSummaryMarkup(items, isAdmin);
   printWindow.document.open();
-  printWindow.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe técnico acumulado</title><style>body{font:14px Arial,sans-serif;color:#243945;margin:28px}h2{margin:5px 0}h3{margin-top:24px}.technical-report-heading{display:flex;justify-content:space-between;border-bottom:2px solid #16777a;padding-bottom:15px}.technical-report-actions{display:none}.label{font-size:11px;letter-spacing:1px;color:#58717b}.technical-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.technical-metrics div{border:1px solid #d6e1e4;border-radius:8px;padding:12px}.technical-metrics b,.technical-metrics span{display:block}.technical-metrics b{font-size:25px}.technical-metrics span,.mu,.technical-footnote{color:#647984;font-size:12px}.technical-overview{background:#eef8f7;border-radius:8px;padding:12px}.technical-week{margin-top:20px;break-inside:avoid}.technical-week h4{border-bottom:1px solid #cfdde0;padding-bottom:7px}.technical-week h4 span{float:right;color:#627780;font-weight:400}.technical-entry{border:1px solid #dce5e8;border-radius:7px;padding:10px;margin:8px 0;break-inside:avoid}.technical-entry p{margin:6px 0}.technical-entry-head{display:flex;justify-content:space-between;gap:12px}.badge{padding:4px 8px;border-radius:15px;background:#fff2cc}.badge.approved{background:#d8f4e5;color:#116b45}.badge.observed,.technical-private{background:#ffe2e2;color:#9b2525}.technical-report-actions{display:none}.directive-outline{display:block}.directive-outline>summary{font-weight:bold}.directive-generalities,.directive-checklist{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.directive-monthly-note{padding:10px;background:#eef8f7}.directive-check-row{border:1px solid #ddd;padding:7px;margin:3px}.directive-check-row small{display:block}.technical-footnote{font-size:11px}@media print{body{margin:15mm}}</style></head><body>${content}</body></html>`);
+  printWindow.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe técnico acumulado</title><style>body{font:14px Arial,sans-serif;color:#243945;margin:28px}h2{margin:5px 0}h3{margin-top:24px}.technical-report-heading{display:flex;justify-content:space-between;border-bottom:2px solid #176bd8;padding-bottom:15px}.technical-report-actions{display:none}.label{font-size:11px;letter-spacing:1px;color:#58717b}.technical-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.technical-metrics div{border:1px solid #d6e1e4;border-radius:8px;padding:12px}.technical-metrics b,.technical-metrics span{display:block}.technical-metrics b{font-size:25px}.technical-metrics span,.mu,.technical-footnote{color:#647984;font-size:12px}.technical-overview{background:#f1f6ff;border-radius:8px;padding:12px}.technical-week{margin-top:20px;break-inside:avoid}.technical-week h4{border-bottom:1px solid #cfdde0;padding-bottom:7px}.technical-week h4 span{float:right;color:#627780;font-weight:400}.technical-entry{border:1px solid #dce5e8;border-radius:7px;padding:10px;margin:8px 0;break-inside:avoid}.technical-entry p{margin:6px 0}.technical-entry-head{display:flex;justify-content:space-between;gap:12px}.badge{padding:4px 8px;border-radius:15px;background:#fff2cc}.badge.approved{background:#d8f4e5;color:#116b45}.badge.observed,.technical-private{background:#ffe2e2;color:#9b2525}.technical-report-actions{display:none}.directive-outline{display:block}.directive-outline>summary{font-weight:bold}.directive-generalities,.directive-checklist{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.directive-monthly-note{padding:10px;background:#f1f6ff}.directive-check-row{border:1px solid #ddd;padding:7px;margin:3px}.directive-check-row small{display:block}.technical-footnote{font-size:11px}@media print{body{margin:15mm}}</style></head><body>${content}</body></html>`);
   printWindow.document.close();
   printWindow.focus();
   setTimeout(() => printWindow.print(), 350);
@@ -1685,7 +1773,7 @@ async function renderAdmin(me) {
   technicalSummaryItems = items;
   window.projectTeamAccounts = people;
   if (typeof renderWorkers === 'function') renderWorkers();
-  shareRoot.innerHTML = `<div class="card"><div class="rw"><div><h3>Administración</h3><div class="mu">Sesión: ${shareEscape(me.email)}</div></div><div class="sp"></div><button data-action="logout">Salir</button></div></div><div class="g2"><div class="card"><h3>Autorizar personal</h3><p class="mu">Escribe el correo y entrega a esa persona el código que aparecerá aquí. También puedes convertir a un trabajador con cuenta activa en administrador.</p><label>Correo</label><input id="newPersonEmail" type="email" placeholder="persona@correo.com"><div class="rw"><button class="pr" data-action="invite">Crear invitación</button></div><p id="shareMessage"></p><div id="peopleList"></div></div><div class="card"><h3>Entregas recibidas: ${items.length}</h3><div class="mu">Revisa los archivos de cada entrega. Todas quedan pendientes hasta que las apruebes o devuelvas con observaciones.</div></div></div><div id="submissionList"></div>`;
+  shareRoot.innerHTML = `<div class="card"><div class="rw"><div><h3>Administración</h3><div class="mu">Sesión: ${shareEscape(me.email)}</div></div><div class="sp"></div></div></div><div class="g2"><div class="card"><h3>Autorizar personal</h3><p class="mu">Escribe el correo y entrega a esa persona el código que aparecerá aquí. También puedes convertir a un trabajador con cuenta activa en administrador.</p><label>Correo</label><input id="newPersonEmail" type="email" placeholder="persona@correo.com"><div class="rw"><button class="pr" data-action="invite">Crear invitación</button></div><p id="shareMessage"></p><div id="peopleList"></div></div><div class="card"><h3>Entregas recibidas: ${items.length}</h3><div class="mu">Revisa los archivos de cada entrega. Todas quedan pendientes hasta que las apruebes o devuelvas con observaciones.</div></div></div><div id="submissionList"></div>`;
   shareRoot.insertAdjacentHTML('afterbegin', reportTemplateLibraryMarkup());
   populateResponsible(people, '');
   document.getElementById('submissionList').insertAdjacentHTML('beforebegin', `<div class="card"><h3>Guardar información antes de iniciar otro proyecto</h3><p class="mu">Descarga en un solo archivo el proyecto, las entregas y los documentos cargados. Esta opción está disponible solo para el administrador.</p><button class="pr" type="button" data-action="download-project-backup">Guardar y descargar copia completa</button></div>`);
@@ -1703,7 +1791,7 @@ async function renderStaff(me) {
   if (typeof renderWorkers === 'function') renderWorkers();
   profileAvatarDraft = me.avatar || '';
   const avatarPreview = me.avatar ? `<img class="profile-avatar-preview" src="${shareEscape(me.avatar)}" alt="Mi avatar">` : '<div class="profile-avatar-preview profile-avatar-empty">+</div>';
-    shareRoot.innerHTML = `<div class="card"><div class="rw"><div><h3>Cuenta del personal</h3><div class="mu">Correo: ${shareEscape(me.email)}</div></div><div class="sp"></div><button data-action="logout">Salir</button></div>${avatarPreview}<label for="profileAvatar">Mi avatar</label><input id="profileAvatar" type="file" accept="image/png,image/jpeg,image/webp"><div class="mini">La imagen aparecerá junto a tu nombre en Trabajadores y responsables.</div><button type="button" data-action="remove-avatar">Quitar avatar</button><label>Nombre completo</label><input id="profileName" value="${shareEscape(me.displayName || '')}" autocomplete="name"><div class="rw"><button data-action="save-name">Guardar perfil</button></div></div><div class="card"><p class="mu">Tus documentos se cargan desde Control. Cada entrega y sus archivos quedan pendientes hasta la revisión del administrador. Si necesitas corregirla, solicita autorización.</p><h3>Mis entregas</h3>${monthlySubmissionArchive(items, false)}</div>`;
+    shareRoot.innerHTML = `<div class="card"><div class="rw"><div><h3>Cuenta del personal</h3><div class="mu">Correo: ${shareEscape(me.email)}</div></div><div class="sp"></div></div>${avatarPreview}<label for="profileAvatar">Mi avatar</label><input id="profileAvatar" type="file" accept="image/png,image/jpeg,image/webp"><div class="mini">La imagen aparecerá junto a tu nombre en Trabajadores y responsables.</div><button type="button" data-action="remove-avatar">Quitar avatar</button><label>Nombre completo</label><input id="profileName" value="${shareEscape(me.displayName || '')}" autocomplete="name"><div class="rw"><button data-action="save-name">Guardar perfil</button></div></div><div class="card"><p class="mu">Tus documentos se cargan desde Control. Cada entrega y sus archivos quedan pendientes hasta la revisión del administrador. Si necesitas corregirla, solicita autorización.</p><h3>Mis entregas</h3>${monthlySubmissionArchive(items, false)}</div>`;
   shareRoot.insertAdjacentHTML('afterbegin', reportTemplateLibraryMarkup());
   document.getElementById('profileAvatar')?.addEventListener('change', async event => {
     const file = event.target.files?.[0];
@@ -2132,7 +2220,8 @@ document.addEventListener('click', async event => {
       const blob = await shareApi('/api/backup/download', { method: 'POST', body: JSON.stringify({}) });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `respaldo-proyecto-${today()}.zip`;
+      const projectSlug = String(project?.name || 'proyecto').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'proyecto';
+      link.download = `respaldo-${projectSlug}-${today()}.zip`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -2172,7 +2261,7 @@ document.addEventListener('click', async event => {
       const periodNote = selectedPeriod ? `<p class="mini"><b>Periodo incluido:</b> ${selectedPeriod.start} al ${selectedPeriod.end}. Se usan solo entregas dentro de estas fechas y del proyecto.</p>` : '';
       const content = periodNote + reportTemplatePreviewHtml(completedTemplate);
       previewWindow.document.open();
-      previewWindow.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font:15px Arial,sans-serif;line-height:1.55;color:#243945;max-width:1000px;margin:28px auto;padding:0 20px}h1,h2,h3,h4{color:#183f4a;line-height:1.25}h1{font-size:25px;margin-top:30px}h2{font-size:21px;margin-top:25px}h3{font-size:18px;margin-top:22px}p{margin:8px 0}hr{border:0;border-top:1px solid #d6e1e4;margin:24px 0}.item{border:1px solid #d6e1e4;border-radius:8px;padding:12px 16px;margin:12px 0;background:#fbfdfd}.mini{color:#627780;font-size:13px}a{color:#126b72;overflow-wrap:anywhere}.report-map-preview{margin:14px 0;padding:12px;border:1px solid #d7e5e7;border-radius:10px;background:#f6fbfb}.report-map-preview b,.report-map-preview a{display:block;margin-bottom:8px}.report-map-preview iframe{display:block;width:100%;height:320px;border:0;border-radius:7px;background:#edf3f3}.print{position:sticky;top:10px;float:right;padding:10px 14px;border:0;border-radius:8px;background:#126b72;color:#fff;cursor:pointer}@media print{body{margin:0 auto}.print{display:none}.report-map-preview iframe{height:250px}}</style></head><body><button class="print" onclick="window.print()">Imprimir / Guardar PDF</button><h1>${title}</h1>${content}</body></html>`);
+      previewWindow.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font:15px Arial,sans-serif;line-height:1.55;color:#243945;max-width:1000px;margin:28px auto;padding:0 20px}h1,h2,h3,h4{color:#1b416f;line-height:1.25}h1{font-size:25px;margin-top:30px}h2{font-size:21px;margin-top:25px}h3{font-size:18px;margin-top:22px}p{margin:8px 0}hr{border:0;border-top:1px solid #d6e1e4;margin:24px 0}.item{border:1px solid #d6e1e4;border-radius:8px;padding:12px 16px;margin:12px 0;background:#fbfdfd}.mini{color:#627780;font-size:13px}a{color:#176bd8;overflow-wrap:anywhere}.report-map-preview{margin:14px 0;padding:12px;border:1px solid #d7e5e7;border-radius:10px;background:#f6fbfb}.report-map-preview b,.report-map-preview a{display:block;margin-bottom:8px}.report-map-preview iframe{display:block;width:100%;height:320px;border:0;border-radius:7px;background:#edf3f3}.print{position:sticky;top:10px;float:right;padding:10px 14px;border:0;border-radius:8px;background:#176bd8;color:#fff;cursor:pointer}@media print{body{margin:0 auto}.print{display:none}.report-map-preview iframe{height:250px}}</style></head><body><button class="print" onclick="window.print()">Imprimir / Guardar PDF</button><h1>${title}</h1>${content}</body></html>`);
       previewWindow.document.close();
     } else if (action === 'download-report-template') {
       if (currentUser?.role !== 'admin') throw new Error('Solo el administrador puede descargar las plantillas.');
@@ -2236,6 +2325,7 @@ document.addEventListener('click', async event => {
     } else if (action === 'login') {
       const result = await shareApi('/api/login', { method: 'POST', body: JSON.stringify({ email: document.getElementById('loginEmail').value, password: document.getElementById('loginPassword').value }) });
       sessionStorage.setItem(SHARE_TOKEN, result.token);
+      setTopLogoutVisible(true);
       closeEntryGate();
       await loadSharedProject();
       await renderShare();
@@ -2260,6 +2350,7 @@ document.addEventListener('click', async event => {
     } else if (action === 'logout') {
       await shareApi('/api/logout', { method: 'POST' });
       sessionStorage.removeItem(SHARE_TOKEN);
+      setTopLogoutVisible(false);
       if (liveSyncTimer) clearInterval(liveSyncTimer);
       liveSyncTimer = null;
       currentUser = null;

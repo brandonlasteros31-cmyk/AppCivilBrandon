@@ -57,8 +57,33 @@ function addWorkerRemovalButtons() {
       button.dataset.email = person.email;
       button.dataset.name = person.displayName || person.email;
       button.textContent = 'Retirar del proyecto';
+      button.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        removeProjectPerson(button.dataset.email, button.dataset.name, button);
+      });
       actions.appendChild(button);
     }
+  }
+}
+
+async function removeProjectPerson(email, name, button) {
+  if (currentUser?.role !== 'admin') { toast('Solo el administrador puede retirar trabajadores del proyecto.'); return; }
+  if (!confirm(`¿Retirar a ${name || email} del proyecto? Perderá el acceso, pero sus informes y archivos se conservarán.`)) return;
+  button.disabled = true;
+  try {
+    await shareApi('/api/people/remove', { method: 'POST', body: JSON.stringify({ email }) });
+    const removedEmail = String(email || '').toLowerCase();
+    window.projectTeamAccounts = (window.projectTeamAccounts || []).filter(person => String(person.email || '').toLowerCase() !== removedEmail);
+    button.closest('.worker-card, .item')?.remove();
+    const [snapshot, people] = await Promise.all([shareApi('/api/live'), shareApi('/api/people')]);
+    window.projectTeamAccounts = people;
+    renderLiveSnapshot(snapshot);
+    await renderShare();
+    toast('Trabajador retirado del proyecto. Sus entregas siguen guardadas.');
+  } catch (error) {
+    button.disabled = false;
+    toast(error.message || 'No se pudo retirar al trabajador.');
   }
 }
 
@@ -1939,7 +1964,8 @@ document.addEventListener('click', async event => {
       const blob = await shareApi('/api/backup/download', { method: 'POST', body: JSON.stringify({}) });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `respaldo-proyecto-${today()}.zip`;
+      const projectSlug = String(project?.name || 'proyecto').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'proyecto';
+      link.download = `respaldo-${projectSlug}-${today()}.zip`;
       document.body.appendChild(link);
       link.click();
       link.remove();
